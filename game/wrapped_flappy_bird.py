@@ -126,7 +126,7 @@ class GameState:
         self.resp_pipe_timer.turnoffTimer()
         self.redline_timer.turnoffTimer()
         self.is_boss = False
-        self.boss_afterwave = 100
+        self.boss_afterwave = 85
         self.boss_afterwave_counter = 101
         self.is_hindsight = False
         self.is_previous_frame_hindsight = False
@@ -336,7 +336,7 @@ class GameState:
                         else:
                             self.base_situation = 2
                     else:
-                        reward =  2 * (open_ratio**0.5)
+                        reward =  3.5 * open_ratio**2
                         self.base_situation = 3
                     print("Big enough? reward: ", reward)
                     self.bulletx = 2 * SCREENWIDTH # only for make suring
@@ -404,10 +404,12 @@ class GameState:
             if pipeMidPos <= playerMidPos < pipeMidPos + 2:
                 self.score += 1
                 #SOUNDS['point'].play() #disable it if you do not need sound
-                reward = 1
                 print("Good! reward: ", reward)
                 if pipe['action'] == 1:
                     self.base_situation = 0
+                    reward = sweetBoss
+                else:
+                    reward = 1
         score = self.score
         #print self.upperPipes[0]['y'] + PIPE_HEIGHT - int(BASEY * 0.2)
         if terminal:

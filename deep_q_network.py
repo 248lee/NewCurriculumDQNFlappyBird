@@ -32,7 +32,7 @@ os.environ['CUDA_VISIBLE_DEVICES']='0'
 # isTrain = args.isTrain
 OBSERVE = 10000 # 训练前观察积累的轮数
 
-side_length_each_stage = [(0, 0), (80, 80), (160, 160), (160, 160)]
+side_length_each_stage = [(0, 0), (40, 40), (80, 80), (160, 160)]
 sys.path.append("game/")
 import wrapped_flappy_bird as game
 tf.debugging.set_log_device_placement(True)
@@ -424,6 +424,8 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     net1_target.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
     net1_target.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
     net1_target.set_weights(net1.get_weights())
+    fall_action_effect_len = 20
+    fall_action_effect_frame = fall_action_effect_len
     # 开始训练
     while True:
         if (event != None and event.is_set()) or t > max_steps:
@@ -441,16 +443,22 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         readouts.append(readout_t)
         a_t_to_game = np.zeros([num_of_actions])
         action_index = 0
-
+        
+        if fall_action_effect_frame < fall_action_effect_len:
+            fall_action_effect_frame += 1
         #贪婪策略，有episilon的几率随机选择动作去探索，否则选取Q值最大的动作
         ispress = False
+        if fall_action_effect_frame < fall_action_effect_len:
+                print("Teacher's FALL!!!")
+                a_t_to_game[0] = 1
+                ispress = True
         for pevent in pygame.event.get():
             # if pevent.type == pygame.QUIT:
             #     pygame.quit()
             #     sys.exit()
 
             # checking if keydown event happened or not
-            if pevent.type == pygame.KEYDOWN:
+            if not ispress and pevent.type == pygame.KEYDOWN:
                 if pevent.key == pygame.K_SPACE:
                     # if keydown event happened
                     # than printing a string to output
@@ -461,7 +469,9 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                     print("Teacher's FIRE!!!")
                     a_t_to_game[2] = 1
                     ispress = True
-                
+                elif pevent.key == pygame.K_9:
+                    fall_action_effect_frame = 0
+            
         if (not ispress):
             if (t > -1):
                 if random.random() <= epsilon:
