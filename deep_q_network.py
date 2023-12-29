@@ -212,8 +212,8 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         #sys.stdout = open(os.devnull, 'w')
         import datetime
         current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        train_log_dir = 'logs/gradient_tape/curriculum/train'
-        train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+        #train_log_dir = 'logs/gradient_tape/curriculum/train'
+        #train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 
     
         
@@ -663,9 +663,9 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             avg_reward = avg_reward - (rewards[len(rewards) - 1000] / 1000)
             avg_reward = avg_reward + (rewards[len(rewards) - 1] / 1000)
             avg_rewards_1000steps.append(avg_reward)
-            if is_colab:
-              with train_summary_writer.as_default():
-                tf.summary.scalar('reward', avg_reward, step=len(avg_rewards_1000steps))
+            #if is_colab:
+            #  with train_summary_writer.as_default():
+            #    tf.summary.scalar('reward', avg_reward, step=len(avg_rewards_1000steps))
         else:
             if t > OBSERVE:
                 avg_reward = avg_reward + r_t / 1000
@@ -680,9 +680,9 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             avg_score = avg_score - (scores[len(scores) - 1000] / 1000)
             avg_score = avg_score + (scores[len(scores) - 1] / 1000)
             avg_scores_1000steps.append(avg_score)
-            if is_colab:
-              with train_summary_writer.as_default():
-                tf.summary.scalar('scores', avg_score, step=len(avg_scores_1000steps))
+            #if is_colab:
+            #  with train_summary_writer.as_default():
+            #    tf.summary.scalar('scores', avg_score, step=len(avg_scores_1000steps))
         else:
             if t > OBSERVE:
                 avg_score = avg_score + score / 1000
