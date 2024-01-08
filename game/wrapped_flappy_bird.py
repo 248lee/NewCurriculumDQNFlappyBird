@@ -13,7 +13,7 @@ misShoot = -0.8
 shootWrong = -1.1
 sweetBoss = 0.5
 no_fire_punishment = -1.1
-isSweet = False
+isSweet = True
 
 FPS = 30000
 SCREENWIDTH  = 288
