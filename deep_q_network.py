@@ -30,7 +30,7 @@ os.environ['CUDA_VISIBLE_DEVICES']='0'
 # max_num_of_steps2 = args.num_of_steps2
 # max_num_of_steps3 = args.num_of_steps3
 # isTrain = args.isTrain
-OBSERVE = 1001 # 训练前观察积累的轮数
+OBSERVE = 10000 # 训练前观察积累的轮数
 
 side_length_each_stage = [(0, 0), (40, 40), (80, 80), (160, 160)]
 sys.path.append("game/")
@@ -53,12 +53,12 @@ class MyNet(Model):
         super(MyNet, self).__init__()
         self.num_of_actions = num_of_actions
         self.b1 = BatchNormalization()  # BN层
-        self.c1_1 = Conv2D(filters=16, kernel_size=(3, 3), padding='same', name='conv_1', 
+        self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        #self.b0 = BatchNormalization()  # BN层
+        self.b0 = BatchNormalization()  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
-        #self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
+        self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -71,10 +71,12 @@ class MyNet(Model):
 
     def call(self, x):
         #print(x.shape)
+        x = self.b1(x)
         x = self.c1_1(x)
         #print(x.shape)
+        x = self.b0(x)
         x = self.a1_1(x)
-        #x = self.p1(x)
+        x = self.p1(x)
 
         x = self.flatten(x)
         x = self.f1(x)
@@ -87,7 +89,7 @@ class MyNet2(Model):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
         self.c3_1 = None
         super(MyNet2, self).__init__()
-        self.b2 = BatchNormalization()  # BN层
+        self.b2 = BatchNormalization(name='johnbatch')  # BN层
         self.num_of_actions = num_of_actions
         self.conv2_num_of_filters = 32
         self.c2_1 = Conv2D(filters=self.conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2',
@@ -97,12 +99,12 @@ class MyNet2(Model):
         self.a2_1 = Activation('relu', name='relu_2')  # 激活层
         
         self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
-        self.c1_1 = Conv2D(filters=16, kernel_size=(3, 3), padding='same', name='conv_1', 
+        self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        #self.b0 = BatchNormalization()  # BN层
+        self.b0 = BatchNormalization()  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
-        #self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
+        self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -113,13 +115,15 @@ class MyNet2(Model):
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))
     def call(self, x):
+        x = self.b2(x)
         x = self.c2_1(x)
+        x = self.b1(x)
         x = self.a2_1(x)
         x = self.p2(x)
-
         x = self.c1_1(x)
+        x = self.b0(x)
         x = self.a1_1(x)
-        #x = self.p1(x)
+        x = self.p1(x)
 
         x = self.flatten(x)
         x = self.f1(x)
@@ -154,12 +158,12 @@ class MyNet3(Model):
         self.a2_1 = Activation('relu', name='relu_2')  # 激活层
         
         self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
-        self.c1_1 = Conv2D(filters=16, kernel_size=(3, 3), padding='same', name='conv_1', 
+        self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
         #self.b0 = BatchNormalization()  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
-        #self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
+        self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -181,7 +185,7 @@ class MyNet3(Model):
 
         x = self.c1_1(x)
         x = self.a1_1(x)
-        #x = self.p1(x)
+        x = self.p1(x)
 
         x = self.flatten(x)
         x = self.f1(x)
@@ -190,7 +194,7 @@ class MyNet3(Model):
     def load_stage2(self, stage2_net):
         new_kernel = custom_kernel_stage3(stage2_net, self.conv3_num_of_filters // 4)
         self.c2_1.set_weights([new_kernel, stage2_net.c2_1.get_weights()[1]])        
-        self.c1_1.set_weights([new_kernel, stage2_net.c1_1.get_weights()[1]])
+        self.c1_1.set_weights([stage2_net.c1_1.get_weights()[0], stage2_net.c1_1.get_weights()[1]])
         self.f1.set_weights([stage2_net.f1.get_weights()[0], stage2_net.f1.get_weights()[1]])
         self.f2.set_weights(stage2_net.f2.get_weights())
         return
@@ -199,7 +203,7 @@ def myprint(s):
     with open('structure.txt','w') as f:
         print(s, file=f)
 
-def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, max_steps, resume_Adam, learning_rate=1e-6, event=None, is_colab=False):
+def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, isSweetBoss, max_steps, resume_Adam, learning_rate=1e-6, event=None, is_colab=False):
     hindsight_memory = []
     neuron = open("neurons.txt", 'w')
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Ask the tensorflow to shut up. IF you disable this, a bunch of logs from tensorflow will put you down when you're using colab.
@@ -352,7 +356,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
 
             net1 = MyNet3(now_num_action)
             net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            net1.load_stage1(stage2_net)
+            net1.load_stage2(stage2_net)
             net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
         else:
             net1 = MyNet3(now_num_action)
@@ -425,7 +429,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     neuron.write(str(net1.f2.get_weights()[0]))
     neuron.write("\n===========================\n")
     # 打开游戏
-    game_state = game.GameState()
+    game_state = game.GameState(isSweetBoss)
     game_state.initializeGame()
 
     # 将每一轮的观测存在D中，之后训练从D中随机抽取batch个数据训练，以打破时间连续导致的相关性，保证神经网络训练所需的随机性。
@@ -604,12 +608,12 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             # 随机抽取minibatch个数据训练
             print("==================start train====================")
             print("Boss length", len(D_boss))
-            if len(D_boss) == 0:
+            num_of_boss_batch = int(BATCH * 1 / 2)
+            if len(D_boss) <= 500:
                 minibatch = random.sample(D, BATCH)
             else:
-                minibatch = random.sample(D, int(BATCH * 1 / 2))
-                remainingBATCH = BATCH - (int(BATCH * 1 / 2))
-                boss_minibatch = random.sample(D_boss, remainingBATCH)
+                minibatch = random.sample(D, BATCH - num_of_boss_batch)
+                boss_minibatch = random.sample(D_boss, num_of_boss_batch)
                 for btch in boss_minibatch:
                     minibatch.append(btch)
             
@@ -635,7 +639,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             b_done = tf.stack(b_done, axis=0)
 
             q_next = tf.reduce_max(net1_target(b_s_), axis=1)
-            q_truth = b_r + GAMMA * q_next* (tf.ones(32) - b_done)
+            q_truth = b_r + GAMMA * q_next* (tf.ones(BATCH) - b_done)
 
             # 训练
             with tf.GradientTape() as tape:

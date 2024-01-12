@@ -9,13 +9,12 @@ from itertools import cycle
 from enum import Enum
 
 fireReward = 0.08
-misShoot = -0.8
-shootWrong = -1.1
+misShoot = -0.5
+shootWrong = -0.5
 sweetBoss = 0.5
-no_fire_punishment = -1.1
-isSweet = True
+no_fire_punishment = -0.7
 
-FPS = 30000
+FPS = 40000
 SCREENWIDTH  = 288
 SCREENHEIGHT = 512
 
@@ -81,7 +80,8 @@ class JohnTimer:
         return self.is_set and self.is_timeup
     
 class GameState:
-    def __init__(self):
+    def __init__(self, isSweetBoss):
+        self.isSweetBoss = isSweetBoss
         self.pipe_generating_timer = JohnTimer(PIPEGENERATE_DELTASTEPS)
         self.resp_pipe_timer = JohnTimer(int(PIPEGENERATE_DELTASTEPS * 1.5))
         self.redline_timer = JohnTimer(int(PIPEGENERATE_DELTASTEPS * 1.15))
@@ -293,7 +293,7 @@ class GameState:
         if self.is_redline_appeared and self.redlinex <= self.playerx:
             if self.is_able_to_fire:
                 reward = no_fire_punishment
-                if isSweet:
+                if self.isSweetBoss:
                     self.base_situation = 3
                 else:
                     self.base_situation = 2
@@ -309,14 +309,14 @@ class GameState:
             #SOUNDS['hit'].play() #disable it if you do not need sound
             #SOUNDS['die'].play() #disable it if you do not need sound
             terminal = True
-            if isSweet and crashReason == CrashReason.bump_resp_pipe:
+            if self.isSweetBoss and crashReason == CrashReason.bump_resp_pipe:
                 if self.playery > PLAYER_HEIGHT / 2 + 7:
                     reward = sweetBoss
                 else:
                     reward = -1
             else:
                 reward = -1
-            self.__init__()
+            self.__init__(self.isSweetBoss)
             
 
         # check bullet his simul pipes            
@@ -331,7 +331,7 @@ class GameState:
                     open_ratio = ((lPipe['y'] - uPipe['y'] - PIPE_HEIGHT) / BASEY)
                     if open_ratio < 0.15:
                         reward = shootWrong
-                        if isSweet:
+                        if self.isSweetBoss:
                             self.base_situation = 3
                         else:
                             self.base_situation = 2
@@ -359,7 +359,7 @@ class GameState:
                     self.bulletx = 2 * SCREENWIDTH # only for make suring
                     self.is_bullet_fired = False
                     self.is_hindsight = False # end of the hindsight interval
-                    if isSweet:
+                    if self.isSweetBoss:
                         self.base_situation = 3
                     else:
                         self.base_situation = 2

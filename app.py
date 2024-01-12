@@ -55,6 +55,7 @@ class MyWindow(QWidget):
 
         self.lock_simple_actions_checkbox = QCheckBox('Is Simple Actions Locked')
         self.activate_boss_mem_checkbox = QCheckBox('Is Activating Boss Memory')
+        self.sweet_boss_checkbox = QCheckBox('Is Sweet Boss')
         self.inherit_checkpoint_checkbox = QCheckBox('Is Checkpoint Inheritted')
 
         self.train_button = QPushButton('Start Training')
@@ -107,6 +108,8 @@ class MyWindow(QWidget):
         layout.addWidget(self.lock_simple_actions_checkbox)
 
         layout.addWidget(self.activate_boss_mem_checkbox)
+
+        layout.addWidget(self.sweet_boss_checkbox)
 
         layout.addWidget(self.inherit_checkpoint_checkbox)
 
@@ -173,6 +176,7 @@ class MyWindow(QWidget):
             now_num_of_ac_file.close()
             is_simple_unlock = self.lock_simple_actions_checkbox.isChecked()
             is_activate_boss_memory = self.activate_boss_mem_checkbox.isChecked()
+            is_sweet_boss = self.sweet_boss_checkbox.isChecked()
             is_inherit_checkpoint = self.inherit_checkpoint_checkbox.isChecked()
             try:
                 max_steps = int(self.max_steps_input.text())
@@ -190,7 +194,7 @@ class MyWindow(QWidget):
             self.train_new_button.setEnabled(False)
 
             self.training_event = threading.Event()
-            self.training_thread = threading.Thread(target=self.run_train_network, args=(stage, num_of_actions, self.lockmode, is_simple_unlock, is_activate_boss_memory, is_inherit_checkpoint, lr, max_steps, self.training_event))
+            self.training_thread = threading.Thread(target=self.run_train_network, args=(stage, num_of_actions, self.lockmode, is_simple_unlock, is_activate_boss_memory, is_inherit_checkpoint, is_sweet_boss, max_steps, lr, self.training_event))
             self.training_thread.start()
             #self.run_train_network(stage, is_pretrained_unlock, max_steps, self.training_event)
         else:
@@ -201,7 +205,7 @@ class MyWindow(QWidget):
             if self.training_thread:
                 self.training_event.set()
 
-    def run_train_network(self, stage, num_of_actions, lockmode, is_simple_unlock, is_activate_boss_memory, is_inherit_checkpoint, lr, max_steps, event : threading.Event):
+    def run_train_network(self, stage, num_of_actions, lockmode, is_simple_unlock, is_activate_boss_memory, is_inherit_checkpoint, is_sweet_boss, max_steps, lr, event : threading.Event):
         self.check_image_modification()
         from deep_q_network import trainNetwork
         print(f"Training Network with stage={stage}, is_simple_unlock={is_simple_unlock}")
@@ -211,7 +215,7 @@ class MyWindow(QWidget):
         training_param_history_file.write(f"stage:\t{stage}\nnum of actions:\t{num_of_actions}\nlock mode:\t{lockmode}\nis simple action unlock:\t{is_simple_unlock}\nis activate boss memory:\t{is_activate_boss_memory}\nlearning rate:\t{lr}\n")
         training_param_history_file.write('-----------------------------')
         training_param_history_file.close()
-        trainNetwork(stage, num_of_actions, lockmode, is_simple_unlock, is_activate_boss_memory, max_steps, is_inherit_checkpoint, lr, event)
+        trainNetwork(stage, num_of_actions, lockmode, is_simple_unlock, is_activate_boss_memory, is_sweet_boss, max_steps, is_inherit_checkpoint, lr, event)
         self.toggle_train_network()
 
     def confirm_train_new_network(self):
