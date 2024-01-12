@@ -52,11 +52,11 @@ class MyNet(Model):
         self.c2_1 = None
         super(MyNet, self).__init__()
         self.num_of_actions = num_of_actions
-        self.b1 = BatchNormalization()  # BN层
+        self.b1 = BatchNormalization(name='batch1')  # BN层
         self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b0 = BatchNormalization()  # BN层
+        self.b0 = BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
@@ -89,20 +89,20 @@ class MyNet2(Model):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
         self.c3_1 = None
         super(MyNet2, self).__init__()
-        self.b2 = BatchNormalization(name='johnbatch')  # BN层
+        self.b2 = BatchNormalization(name='batch2')  # BN层
         self.num_of_actions = num_of_actions
         self.conv2_num_of_filters = 32
         self.c2_1 = Conv2D(filters=self.conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b1 = BatchNormalization()  # BN层
+        self.b1 = BatchNormalization(name='batch1')  # BN层
         self.a2_1 = Activation('relu', name='relu_2')  # 激活层
         
         self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
         self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b0 = BatchNormalization()  # BN层
+        self.b0 = BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
@@ -141,11 +141,11 @@ class MyNet3(Model):
         super(MyNet3, self).__init__()
         self.num_of_actions = num_of_actions
         self.conv3_num_of_filters = 32
-        self.b3 = BatchNormalization()  # BN层
+        self.b3 = BatchNormalization(name='batch3')  # BN层
         self.c3_1 = Conv2D(filters=self.conv3_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_3',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        #self.b2 = BatchNormalization()  # BN层
+        self.b1 = BatchNormalization(name='batch2')  # BN层
         self.a3_1 = Activation('relu', name='relu_3')  # 激活层
         
         self.p3 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_3')  # 池化层
@@ -154,14 +154,14 @@ class MyNet3(Model):
         self.c2_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_2',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        #self.b1 = BatchNormalization()  # BN层
+        self.b1 = BatchNormalization(name='batch1')  # BN层
         self.a2_1 = Activation('relu', name='relu_2')  # 激活层
         
         self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
         self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        #self.b0 = BatchNormalization()  # BN层
+        self.b0 = BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
