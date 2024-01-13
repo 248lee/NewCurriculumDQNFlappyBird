@@ -9,3 +9,7 @@
 /results.txt
 /structure.txt
 /training_history.txt
+/last_old_time.txt
+/now_num_of_actions.txt
+/now_stage.txt
+/reward_plot.png
