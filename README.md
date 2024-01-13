@@ -1,5 +1,5 @@
 # Curriculum DQN flappy bird with tensorflow2
-<img src=https://i.imgur.com/MVIA3ob.gif>
+<img src="https://i.imgur.com/MFnCmpD.gif" />
 
 ### This project is only tested in the conda environment with python=3.10.13, Ubuntu18.04 and 20.04.
 # Environment Installation:
