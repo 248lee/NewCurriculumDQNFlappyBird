@@ -1,10 +1,8 @@
-/Qvalues/Q0.txt
-/Qvalues/Q1.txt
-/Qvalues/Q2.txt
+/Qvalues
 /__pycache__
 /exp_video_30x30_20231124.mp4
 /logs
-/model/FlappyBird.h5
+/model
 /neurons.txt
 /rank.txt
 /record40x40to80x80.txt
