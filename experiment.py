@@ -30,7 +30,7 @@ os.environ['CUDA_VISIBLE_DEVICES']='0'
 # max_num_of_steps2 = args.num_of_steps2
 # max_num_of_steps3 = args.num_of_steps3
 # isTrain = args.isTrain
-OBSERVE = 1010 # 训练前观察积累的轮数
+OBSERVE = 10000 # 训练前观察积累的轮数
 
 side_length_each_stage = [(0, 0), (40, 40), (80, 80), (160, 160)]
 sys.path.append("game/")
@@ -669,6 +669,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 # for ars in avg_scores_1000steps:
                 #     score_file.write(str(ars) + '\n')
                 # score_file.close()
+                avg_rewards_1000steps = []
                 avg_scores_1000steps = []
                 # Save Adam optimizer status
                 checkpoint = tf.train.Checkpoint(optimizer=optimizer)
@@ -688,15 +689,21 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print("OBSERVED_TIMESTEP", t, "|  ACTION", ACTIONS_NAME[action_index], "|  REWARD", r_t, \
              "|  Q_MAX %e \n" % np.max(readout_t), "| EPISODE", num_of_episode)
         # write result to the average array, prepare to write to the file
-        if len(rewards) == 1000:
-            avg_reward = np.average(np.array(rewards))
+        if len(rewards) >= 1000:
+            avg_reward = avg_reward - (rewards[len(rewards) - 1000] / 1000)
+            avg_reward = avg_reward + (rewards[len(rewards) - 1] / 1000)
             avg_rewards_1000steps.append(avg_reward)
-            rewards = []
             #if is_colab:
             #  with train_summary_writer.as_default():
             #    tf.summary.scalar('reward', avg_reward, step=len(avg_rewards_1000steps))
-        
-        
+        else:
+            if t > OBSERVE:
+                avg_reward = avg_reward + r_t / 1000
+        if len(rewards) >= 5000: # Clean the memory of rewards
+            tmp_new_rewards = []
+            for i in range(len(rewards) - 1000, len(rewards)):
+                tmp_new_rewards.append(rewards[i])
+            rewards = tmp_new_rewards
 
         # write score to the average array, prepare to write to the file
         if len(scores) >= 1000:
@@ -717,19 +724,17 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
 
         # write logs to files every 5000 steps
         if len(readouts) % 5000 == 0:
-            #num_of_files = readouts[0].shape[1]
-            #for i in range(num_of_files):
-            #    f = open('./Qvalues/Q'+str(i)+'.txt', 'a')
-            #    for q in readouts:
-            #        f.write(str(float(q[0][i]))+'\n')
-            #    f.close()
+            num_of_files = readouts[0].shape[1]
+            for i in range(num_of_files):
+                f = open('./Qvalues/Q'+str(i)+'.txt', 'a')
+                for q in readouts:
+                    f.write(str(float(q[0][i]))+'\n')
+                f.close()
             readouts = [] # clean the memory of the readouts
 
-        if len(avg_rewards_1000steps) == 2:
             result_file = open("results.txt", 'a')
             for ar in avg_rewards_1000steps:
                 result_file.write(str(ar) + '\n')
-            avg_rewards_1000steps = []
             result_file.close()
             
 
