@@ -699,21 +699,13 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         
 
         # write score to the average array, prepare to write to the file
-        if len(scores) >= 1000:
-            avg_score = avg_score - (scores[len(scores) - 1000] / 1000)
-            avg_score = avg_score + (scores[len(scores) - 1] / 1000)
+        if len(scores) == 1000:
+            avg_score = np.average(np.array(scores))
             avg_scores_1000steps.append(avg_score)
+            scores = []
             #if is_colab:
             #  with train_summary_writer.as_default():
             #    tf.summary.scalar('scores', avg_score, step=len(avg_scores_1000steps))
-        else:
-            if t > OBSERVE:
-                avg_score = avg_score + score / 1000
-        if len(scores) >= 5000: # Clean the memory of scores
-            tmp_new_scores = []
-            for i in range(len(scores) - 1000, len(scores)):
-                tmp_new_scores.append(scores[i])
-            scores = tmp_new_scores
 
         # write logs to files every 5000 steps
         if len(readouts) % 5000 == 0:
@@ -725,12 +717,19 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             #    f.close()
             readouts = [] # clean the memory of the readouts
 
-        if len(avg_rewards_1000steps) == 2:
+        if len(avg_rewards_1000steps) == 10:
             result_file = open("results.txt", 'a')
             for ar in avg_rewards_1000steps:
                 result_file.write(str(ar) + '\n')
             avg_rewards_1000steps = []
             result_file.close()
+
+        if len(avg_scores_1000steps) == 10:
+            scores_file = open("scores.txt", 'a')
+            for ar in avg_scores_1000steps:
+                scores_file.write(str(ar) + '\n')
+            avg_scores_1000steps = []
+            scores_file.close()
             
 
         # Count episodes
