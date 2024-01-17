@@ -30,7 +30,7 @@ os.environ['CUDA_VISIBLE_DEVICES']='0'
 # max_num_of_steps2 = args.num_of_steps2
 # max_num_of_steps3 = args.num_of_steps3
 # isTrain = args.isTrain
-OBSERVE = 10000 # 训练前观察积累的轮数
+OBSERVE = 1010 # 训练前观察积累的轮数
 
 side_length_each_stage = [(0, 0), (40, 40), (80, 80), (160, 160)]
 sys.path.append("game/")
@@ -285,6 +285,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
             new_net1.f2.set_weights([controlNet.f2.get_weights()[0], controlNet.f2.get_weights()[1]]) # load the weights of the third action from the control network
             change2To3(new_net1, net1) # load the weights of the original network
+            net1 = new_net1
             controlNet = None # clean the garbage
             num_actions_file = open('now_num_of_actions.txt', 'w')
             num_actions_file.write(str(ACTIONS_2))
@@ -310,16 +311,8 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 stage1_net.load_weights(checkpoint_save_path,by_name=True)
                 net1 = MyNet2(now_num_action)
                 net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-                net1.load_weights('model/ControlGroup.h5')
-                print(net1.c2_1.get_weights())
-                print(net1.c1_1.get_weights())
-                print('======================================')
-                net1.load_stage1(stage1_net)
-                print(net1.c2_1.get_weights())
-                print(net1.c1_1.get_weights())
-                print('======================================')
-                print(controlNet.f2.get_weights())
-                input()
+                net1.load_weights('model/ControlGroup.h5') # Load the weights of the control network in order to gain the c2_1
+                net1.load_stage1(stage1_net) # Load the weights of the original network
                 net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
             else: # Train new network for the control group
                 net1 = MyNet2(now_num_action)
