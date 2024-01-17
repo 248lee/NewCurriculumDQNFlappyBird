@@ -263,22 +263,36 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             net1.load_weights(checkpoint_save_path,by_name=True)
         else:
             # Create the experimenting network for the control group
+            net2_2action = MyNet2(ACTIONS_1) # First, we create a stage2 network with only two actions
+            net2_2action.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
+            net2_2action.load_stage1(net1) # We let the stage2-two-action-network to load the weights of the normal network
+            net2_2action.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
             net2 = MyNet2(ACTIONS_2)
             net2.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
             net2.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
-            net2.save_weights('model/ControlGroup',save_format='h5')
-            print(next_input_sidelength[0])
-            input()
+            change2To3(net2, net2_2action) # Then, we add the third action to the ControlGroup
+            net2.save_weights('model/ControlGroup.h5',save_format='h5') # Finally, save it
+            net2_2action = None # Clean the garbage
             print('-------------train new model-----------------')
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
-            new_net1 = MyNet2(num_of_actions)
+            controlNet = MyNet2(num_of_actions)
+            controlNet.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
+            controlNet.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
+            controlNet.load_weights('model/ControlGroup.h5', by_name=True)
+            new_net1 = MyNet(num_of_actions)
             new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            new_net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-            new_net1.load_weights('model/ControlGroup.h5', by_name=True)
+            new_net1.f2.set_weights([controlNet.f2.get_weights()[0], controlNet.f2.get_weights()[1]])
             change2To3(new_net1, net1)
+            print(net1.c1_1.get_weights())
+            print(net1.f2.get_weights())
+            print('======================================')
             net1 = new_net1 # Update the net1 to the THREE-actinos version
+            print(net1.c1_1.get_weights())
+            print(net1.f2.get_weights())
+            print('======================================')
+            input()
             num_actions_file = open('now_num_of_actions.txt', 'w')
             num_actions_file.write(str(ACTIONS_2))
             num_actions_file.close()
@@ -303,7 +317,15 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 stage1_net.load_weights(checkpoint_save_path,by_name=True)
                 net1 = MyNet2(now_num_action)
                 net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
+                net1.load_weights('model/ControlGroup.h5')
+                print(net1.c2_1.get_weights())
+                print(net1.c1_1.get_weights())
+                print('======================================')
                 net1.load_stage1(stage1_net)
+                print(net1.c2_1.get_weights())
+                print(net1.c1_1.get_weights())
+                print('======================================')
+                input()
                 net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
             else: # Train new network for the control group
                 net1 = MyNet2(now_num_action)
