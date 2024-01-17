@@ -30,7 +30,7 @@ os.environ['CUDA_VISIBLE_DEVICES']='0'
 # max_num_of_steps2 = args.num_of_steps2
 # max_num_of_steps3 = args.num_of_steps3
 # isTrain = args.isTrain
-OBSERVE = 1010 # 训练前观察积累的轮数
+OBSERVE = 10000 # 训练前观察积累的轮数
 
 side_length_each_stage = [(0, 0), (40, 40), (80, 80), (160, 160)]
 sys.path.append("game/")
@@ -204,6 +204,7 @@ def myprint(s):
         print(s, file=f)
 
 def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, isSweetBoss, max_steps, resume_Adam, learning_rate=1e-6, event=None, is_colab=False):
+    previous_score = 0
     hindsight_memory = []
     neuron = open("neurons.txt", 'w')
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Ask the tensorflow to shut up. IF you disable this, a bunch of logs from tensorflow will put you down when you're using colab.
@@ -452,7 +453,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
 
     scores = []
     avg_score = 0
-    avg_scores_1000steps = []
 
     t_train = 0
     net1_target.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
@@ -669,7 +669,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 # for ars in avg_scores_1000steps:
                 #     score_file.write(str(ars) + '\n')
                 # score_file.close()
-                avg_scores_1000steps = []
                 # Save Adam optimizer status
                 checkpoint = tf.train.Checkpoint(optimizer=optimizer)
                 checkpoint_dir = './model'
@@ -683,7 +682,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print("TRAINED_TIMESTEP", (t_train+old_time), "|  ACTION", ACTIONS_NAME[action_index], "|  REWARD", r_t, \
              "|  Q_MAX %e \n" % np.max(readout_t), "| EPISODE", num_of_episode)
             rewards.append(r_t)
-            scores.append(score)
         else:
             print("OBSERVED_TIMESTEP", t, "|  ACTION", ACTIONS_NAME[action_index], "|  REWARD", r_t, \
              "|  Q_MAX %e \n" % np.max(readout_t), "| EPISODE", num_of_episode)
@@ -699,10 +697,12 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         
 
         # write score to the average array, prepare to write to the file
-        if len(scores) == 1000:
-            avg_score = np.average(np.array(scores))
-            avg_scores_1000steps.append(avg_score)
+        if len(scores) == 2:
+            scores_file = open("scores.txt", 'a')
+            for s in scores:
+                scores_file.write(str(s) + '\n')
             scores = []
+            scores_file.close()
             #if is_colab:
             #  with train_summary_writer.as_default():
             #    tf.summary.scalar('scores', avg_score, step=len(avg_scores_1000steps))
@@ -724,18 +724,15 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             avg_rewards_1000steps = []
             result_file.close()
 
-        if len(avg_scores_1000steps) == 10:
-            scores_file = open("scores.txt", 'a')
-            for ar in avg_scores_1000steps:
-                scores_file.write(str(ar) + '\n')
-            avg_scores_1000steps = []
-            scores_file.close()
+            
             
 
         # Count episodes
         if terminal:
             num_of_episode = num_of_episode + 1
-        
+            scores.append(previous_score)
+        previous_score = score
+
 
 
 def custom_kernel_stage2(old_net, thickness):
