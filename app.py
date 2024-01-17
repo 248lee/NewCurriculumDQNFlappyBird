@@ -207,12 +207,12 @@ class MyWindow(QWidget):
 
     def run_train_network(self, stage, num_of_actions, lockmode, is_simple_unlock, is_activate_boss_memory, is_inherit_checkpoint, is_sweet_boss, max_steps, lr, event : threading.Event):
         self.check_image_modification()
-        from deep_q_network import trainNetwork
+        from experiment import trainNetwork
         print(f"Training Network with stage={stage}, is_simple_unlock={is_simple_unlock}")
         last_steps = self.read_last_old_time()
         training_param_history_file = open('training_history.txt', 'a')
         training_param_history_file.write(f"LAST STEPS:\t{last_steps}-----------------------------\n")
-        training_param_history_file.write(f"stage:\t{stage}\nnum of actions:\t{num_of_actions}\nlock mode:\t{lockmode}\nis simple action unlock:\t{is_simple_unlock}\nis activate boss memory:\t{is_activate_boss_memory}\nlearning rate:\t{lr}\n")
+        training_param_history_file.write(f"stage:\t{stage}\nnum of actions:\t{num_of_actions}\nlock mode:\t{lockmode}\nis simple action unlock:\t{is_simple_unlock}\nis activate boss memory:\t{is_activate_boss_memory}\nis sweet boss:\t{is_sweet_boss}\nlearning rate:\t{lr}\n")
         training_param_history_file.write('-----------------------------')
         training_param_history_file.close()
         trainNetwork(stage, num_of_actions, lockmode, is_simple_unlock, is_activate_boss_memory, is_sweet_boss, max_steps, is_inherit_checkpoint, lr, event)

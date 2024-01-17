@@ -228,6 +228,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     # 模型创建
     input_sidelength = side_length_each_stage[stage]
     last_input_sidelength = side_length_each_stage[stage - 1]
+    next_input_sidelength = side_length_each_stage[stage + 1]
     checkpoint_save_path = "./model/FlappyBird.h5"
     epsilon = EPSILON
 
@@ -261,14 +262,21 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print('-------------load the model-----------------')
             net1.load_weights(checkpoint_save_path,by_name=True)
         else:
+            # Create the experimenting network for the control group
+            net2 = MyNet2(ACTIONS_2)
+            net2.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
+            net2.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
+            net2.save_weights('model/ControlGroup',save_format='h5')
+            print(next_input_sidelength[0])
+            input()
             print('-------------train new model-----------------')
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
-            new_net1 = MyNet(num_of_actions)
+            new_net1 = MyNet2(num_of_actions)
             new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
             new_net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-            new_net1.summary(print_fn=myprint)
+            new_net1.load_weights('model/ControlGroup.h5', by_name=True)
             change2To3(new_net1, net1)
             net1 = new_net1 # Update the net1 to the THREE-actinos version
             num_actions_file = open('now_num_of_actions.txt', 'w')
@@ -284,7 +292,8 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             net1.f2.trainable = True
         
     elif stage == 2:
-        optimizer = tf.keras.optimizers.Adam(learning_rate = learning_rate, epsilon=1e-08)                
+        optimizer = tf.keras.optimizers.Adam(learning_rate = learning_rate, epsilon=1e-08)           
+        net1 = None     
         if stage > now_stage:
             stage1_net = MyNet(now_num_action)
             stage1_net.build(input_shape=(1, last_input_sidelength[0], last_input_sidelength[1], 4))
@@ -292,14 +301,16 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             if os.path.exists(checkpoint_save_path):
                 print('-------------load the model and modify to stage2----------------')
                 stage1_net.load_weights(checkpoint_save_path,by_name=True)
-            else:
-                print("NO pretrained model to load! Pleast train stage1 first!")
-                return
+                net1 = MyNet2(now_num_action)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
+                net1.load_stage1(stage1_net)
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+            else: # Train new network for the control group
+                net1 = MyNet2(now_num_action)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+                net1.load_weights('model/ControlGroup.h5')
 
-            net1 = MyNet2(now_num_action)
-            net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            net1.load_stage1(stage1_net)
-            net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
         else:
             net1 = MyNet2(now_num_action)
             net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
@@ -307,16 +318,18 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             if os.path.exists(checkpoint_save_path):
                 print('-------------load the model-----------------')
                 net1.load_weights(checkpoint_save_path,by_name=True)
-            else:
-                print("NO pretrained model to load! Pleast train stage1 first!")
-                return
+            else: # Train new network for the control group
+                net1 = MyNet2(now_num_action)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+                net1.load_weights('model/ControlGroup.h5')
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
             new_net1 = MyNet2(num_of_actions)
             new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
             new_net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-            new_net1.summary(print_fn=myprint)
+            new_net1.load_weights('model/ControlGroup.h5', by_name=True)
             change2To3(new_net1, net1)
             net1 = new_net1 # Update the net1 to the THREE-actinos version
             num_actions_file = open('now_num_of_actions.txt', 'w')
@@ -669,8 +682,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 # for ars in avg_scores_1000steps:
                 #     score_file.write(str(ars) + '\n')
                 # score_file.close()
-                avg_rewards_1000steps = []
-                avg_scores_1000steps = []
                 # Save Adam optimizer status
                 checkpoint = tf.train.Checkpoint(optimizer=optimizer)
                 checkpoint_dir = './model'
@@ -689,21 +700,14 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print("OBSERVED_TIMESTEP", t, "|  ACTION", ACTIONS_NAME[action_index], "|  REWARD", r_t, \
              "|  Q_MAX %e \n" % np.max(readout_t), "| EPISODE", num_of_episode)
         # write result to the average array, prepare to write to the file
-        if len(rewards) >= 1000:
-            avg_reward = avg_reward - (rewards[len(rewards) - 1000] / 1000)
-            avg_reward = avg_reward + (rewards[len(rewards) - 1] / 1000)
+        if len(rewards) == 1000:
+            avg_reward = np.average(np.array(rewards))
             avg_rewards_1000steps.append(avg_reward)
+            rewards = []
             #if is_colab:
             #  with train_summary_writer.as_default():
             #    tf.summary.scalar('reward', avg_reward, step=len(avg_rewards_1000steps))
-        else:
-            if t > OBSERVE:
-                avg_reward = avg_reward + r_t / 1000
-        if len(rewards) >= 5000: # Clean the memory of rewards
-            tmp_new_rewards = []
-            for i in range(len(rewards) - 1000, len(rewards)):
-                tmp_new_rewards.append(rewards[i])
-            rewards = tmp_new_rewards
+        
 
         # write score to the average array, prepare to write to the file
         if len(scores) >= 1000:
@@ -716,11 +720,11 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         else:
             if t > OBSERVE:
                 avg_score = avg_score + score / 1000
-        if len(scores) >= 5000: # Clean the memory of scores
-            tmp_new_scores = []
-            for i in range(len(scores) - 1000, len(scores)):
-                tmp_new_scores.append(scores[i])
-            scores = tmp_new_scores
+        #if len(scores) >= 5000: # Clean the memory of scores
+        #    tmp_new_scores = []
+        #    for i in range(len(scores) - 1000, len(scores)):
+        #        tmp_new_scores.append(scores[i])
+        #    scores = tmp_new_scores
 
         # write logs to files every 5000 steps
         if len(readouts) % 5000 == 0:
@@ -732,9 +736,11 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 f.close()
             readouts = [] # clean the memory of the readouts
 
+        if len(avg_rewards_1000steps) == 2:
             result_file = open("results.txt", 'a')
             for ar in avg_rewards_1000steps:
                 result_file.write(str(ar) + '\n')
+            avg_rewards_1000steps = []
             result_file.close()
             
 
@@ -769,9 +775,9 @@ def custom_dense(old_net, new_net):
   return new_fc, new_bias
 
 def change2To3(new_net, two_action_net):
-    if new_net.c3_1 != None:
+    if two_action_net.c3_1 != None:
         new_net.c3_1.set_weights([two_action_net.c3_1.get_weights()[0], two_action_net.c3_1.get_weights()[1]])
-    if new_net.c2_1 != None:
+    if two_action_net.c2_1 != None:
         new_net.c2_1.set_weights([two_action_net.c2_1.get_weights()[0], two_action_net.c2_1.get_weights()[1]])
     new_net.c1_1.set_weights([two_action_net.c1_1.get_weights()[0], two_action_net.c1_1.get_weights()[1]])
     new_net.f1.set_weights([two_action_net.f1.get_weights()[0], two_action_net.f1.get_weights()[1]])

@@ -4,12 +4,13 @@
 /logs
 /model
 /neurons.txt
+/scores.txt
 /rank.txt
 /record40x40to80x80.txt
 /results.txt
+/reward_plot.png
 /structure.txt
 /training_history.txt
 /last_old_time.txt
 /now_num_of_actions.txt
 /now_stage.txt
-/reward_plot.png

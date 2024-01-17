@@ -10,9 +10,9 @@ from enum import Enum
 
 fireReward = 0.08
 misShoot = -0.5
-shootWrong = -0.5
+shootWrong = -0.3
 sweetBoss = 0.5
-no_fire_punishment = -0.7
+no_fire_punishment = -0.3
 
 FPS = 40000
 SCREENWIDTH  = 288
@@ -336,7 +336,7 @@ class GameState:
                         else:
                             self.base_situation = 2
                     else:
-                        reward =  3.5 * open_ratio**2
+                        reward =  1.5 * open_ratio**2
                         self.base_situation = 3
                     print("Big enough? reward: ", reward)
                     self.bulletx = 2 * SCREENWIDTH # only for make suring
