@@ -277,22 +277,15 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
-            controlNet = MyNet2(num_of_actions)
+            controlNet = MyNet2(num_of_actions) # Since the control net is at stage2, we need to create it additionally
             controlNet.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
             controlNet.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
             controlNet.load_weights('model/ControlGroup.h5', by_name=True)
-            new_net1 = MyNet(num_of_actions)
+            new_net1 = MyNet(num_of_actions) # This is the new three-actions-net
             new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            new_net1.f2.set_weights([controlNet.f2.get_weights()[0], controlNet.f2.get_weights()[1]])
-            change2To3(new_net1, net1)
-            print(net1.c1_1.get_weights())
-            print(net1.f2.get_weights())
-            print('======================================')
-            net1 = new_net1 # Update the net1 to the THREE-actinos version
-            print(net1.c1_1.get_weights())
-            print(net1.f2.get_weights())
-            print('======================================')
-            input()
+            new_net1.f2.set_weights([controlNet.f2.get_weights()[0], controlNet.f2.get_weights()[1]]) # load the weights of the third action from the control network
+            change2To3(new_net1, net1) # load the weights of the original network
+            controlNet = None # clean the garbage
             num_actions_file = open('now_num_of_actions.txt', 'w')
             num_actions_file.write(str(ACTIONS_2))
             num_actions_file.close()
@@ -325,6 +318,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 print(net1.c2_1.get_weights())
                 print(net1.c1_1.get_weights())
                 print('======================================')
+                print(controlNet.f2.get_weights())
                 input()
                 net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
             else: # Train new network for the control group
@@ -348,14 +342,26 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
-            new_net1 = MyNet2(num_of_actions)
-            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            new_net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-            new_net1.load_weights('model/ControlGroup.h5', by_name=True)
-            change2To3(new_net1, net1)
+            controlNet = MyNet2(num_of_actions) # Since the control net is at stage2, we need to create it additionally
+            controlNet.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
+            controlNet.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
+            controlNet.load_weights('model/ControlGroup.h5', by_name=True)
+            new_net1 = MyNet2(num_of_actions) # This is the new three-actions-net
+            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4)) # load the weights of the third action from the control network
+            new_net1.f2.set_weights([controlNet.f2.get_weights()[0], controlNet.f2.get_weights()[1]])
+            change2To3(new_net1, net1) # load the weights of the original network
+            print(net1.c1_1.get_weights())
+            print(net1.f2.get_weights())
+            print('======================================')
             net1 = new_net1 # Update the net1 to the THREE-actinos version
+            print(net1.c1_1.get_weights())
+            print(net1.f2.get_weights())
+            print('======================================')
+            print(controlNet.f2.get_weights())
+            input()
+            controlNet = None # clean the garbage
             num_actions_file = open('now_num_of_actions.txt', 'w')
-            num_actions_file.write(str(num_of_actions))
+            num_actions_file.write(str(ACTIONS_2))
             num_actions_file.close()
 
         net1_target = MyNet2(net1.num_of_actions)
