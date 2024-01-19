@@ -30,7 +30,7 @@ os.environ['CUDA_VISIBLE_DEVICES']='0'
 # max_num_of_steps2 = args.num_of_steps2
 # max_num_of_steps3 = args.num_of_steps3
 # isTrain = args.isTrain
-OBSERVE = 1010 # 训练前观察积累的轮数
+OBSERVE = 10000 # 训练前观察积累的轮数
 
 side_length_each_stage = [(0, 0), (40, 40), (80, 80), (160, 160)]
 sys.path.append("game/")
@@ -331,7 +331,11 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 net1 = MyNet2(now_num_action)
                 net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
                 net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-                net1.load_weights('model/ControlGroup.h5')
+                net2 = MyNet2(ACTIONS_2)
+                net2.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
+                net2.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+                net2.load_weights('model/ControlGroup.h5')
+                change3To2(net1, net2)
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
@@ -803,6 +807,29 @@ def change2To3(new_net, two_action_net):
     new_net.c1_1.set_weights([two_action_net.c1_1.get_weights()[0], two_action_net.c1_1.get_weights()[1]])
     new_net.f1.set_weights([two_action_net.f1.get_weights()[0], two_action_net.f1.get_weights()[1]])
     new_fc, new_bias = custom_dense(two_action_net, new_net=new_net)
+    new_net.f2.set_weights([new_fc, new_bias])
+
+def reverse_custom_dense(old_net, new_net):
+  old_fc = old_net.f2.get_weights()[0]
+  new_fc = new_net.f2.get_weights()[0]
+  for i in range(new_fc.shape[0]):
+    for j in range(new_fc.shape[1]):
+      new_fc[i][j] = old_fc[i][j]
+  old_bias = old_net.f2.get_weights()[1]
+  new_bias = new_net.f2.get_weights()[1]
+  for i in range(new_bias.shape[0]):
+    new_bias[i] = old_bias[i]
+  
+  return new_fc, new_bias
+
+def change3To2(new_net, three_action_net):
+    if three_action_net.c3_1 != None:
+        new_net.c3_1.set_weights([three_action_net.c3_1.get_weights()[0], three_action_net.c3_1.get_weights()[1]])
+    if three_action_net.c2_1 != None:
+        new_net.c2_1.set_weights([three_action_net.c2_1.get_weights()[0], three_action_net.c2_1.get_weights()[1]])
+    new_net.c1_1.set_weights([three_action_net.c1_1.get_weights()[0], three_action_net.c1_1.get_weights()[1]])
+    new_net.f1.set_weights([three_action_net.f1.get_weights()[0], three_action_net.f1.get_weights()[1]])
+    new_fc, new_bias = reverse_custom_dense(three_action_net, new_net=new_net)
     new_net.f2.set_weights([new_fc, new_bias])
 
 def custom_kernel_stage3(old_net, thickness):
