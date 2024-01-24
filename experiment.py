@@ -48,7 +48,9 @@ BATCH = 32 # 训练batch大小
 class MyNet(Model):
     def __init__(self, num_of_actions):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
+        self.b3 = None
         self.c3_1 = None
+        self.b2 = None
         self.c2_1 = None
         super(MyNet, self).__init__()
         self.num_of_actions = num_of_actions
@@ -87,6 +89,7 @@ class MyNet(Model):
 class MyNet2(Model):
     def __init__(self, num_of_actions):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
+        self.b3 = None
         self.c3_1 = None
         super(MyNet2, self).__init__()
         self.b2 = BatchNormalization(name='batch2')  # BN层
@@ -295,7 +298,9 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         now_stage_file.close()
         net1_target = MyNet(net1.num_of_actions)
         if lock_mode == 1: # only fc is unlocked
+            net1.b1.trainable = False
             net1.c1_1.trainable = False
+            net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = True
         
@@ -328,6 +333,8 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 print('-------------load the model-----------------')
                 net1.load_weights(checkpoint_save_path,by_name=True)
             else: # Train new network for the control group
+                print('-------------train new model-------------')
+                input()
                 net1 = MyNet2(now_num_action)
                 net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
                 net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
@@ -364,12 +371,17 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         net1_target = MyNet2(net1.num_of_actions)
         if lock_mode == 0: # only new added is unlocked
             net1.c2_1.trainable = True
+            net1.b1.trainable = False
             net1.c1_1.trainable = False
+            net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = False
         elif lock_mode == 1: # only fc is unlocked
+            net1.b2.trainable = False
             net1.c2_1.trainable = False
+            net1.b1.trainable = False
             net1.c1_1.trainable = False
+            net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = True
         elif lock_mode == 2: # everything is unlocked
@@ -510,7 +522,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             #exit(0)
         # 根据输入的s_t,选择一个动作a_t
         
-        readout_t = net1(tf.expand_dims(tf.constant(s_t, dtype=tf.float32), 0))
+        readout_t = net1(tf.expand_dims(tf.constant(s_t, dtype=tf.float32), 0), training=False)
         print(readout_t)
         readouts.append(readout_t)
         a_t_to_game = np.zeros([num_of_actions])
@@ -676,12 +688,12 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             b_done = [d[4] for d in minibatch]
             b_done = tf.stack(b_done, axis=0)
 
-            q_next = tf.reduce_max(net1_target(b_s_), axis=1)
+            q_next = tf.reduce_max(net1_target(b_s_, training=True), axis=1)
             q_truth = b_r + GAMMA * q_next* (tf.ones(BATCH) - b_done)
 
             # 训练
             with tf.GradientTape() as tape:
-                q_output = net1(b_s)
+                q_output = net1(b_s, training=True)
                 index = tf.expand_dims(tf.constant(np.arange(0, BATCH), dtype=tf.int32), 1)
                 index_b_a = tf.concat((index, b_a), axis=1)
                 q = tf.gather_nd(q_output, index_b_a)
@@ -690,10 +702,16 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 gradients = tape.gradient(loss, net1.trainable_variables)
                 if num_of_actions == ACTIONS_2 and lock_mode >= 1 and is_simple_actions_locked:
                     print("Lock actions: static and jump")
+                    # Lock simple weights
                     f2_weightings_index = len(gradients) - 2
-                    tensor = tf.constant([[0.0, 0.0, 1.0] for i in range(gradients[f2_weightings_index].shape[0])], shape=[gradients[f2_weightings_index].shape[0], gradients[f2_weightings_index].shape[1]])
-                    print(gradients[f2_weightings_index].shape, tensor.shape)
-                    gradients[f2_weightings_index] = gradients[f2_weightings_index] * tensor
+                    tensor_w = tf.constant([[0.0, 0.0, 1.0] for i in range(gradients[f2_weightings_index].shape[0])], shape=[gradients[f2_weightings_index].shape[0], gradients[f2_weightings_index].shape[1]])
+                    print(gradients[f2_weightings_index].shape, tensor_w.shape)
+                    gradients[f2_weightings_index] = gradients[f2_weightings_index] * tensor_w
+                    # Lock simple bias
+                    f2_bias_index = len(gradients) - 1
+                    tensor_b = tf.constant([0.0, 0.0, 1.0])
+                    print(gradients[f2_bias_index].shape, tensor_b.shape)
+                    gradients[f2_bias_index] = gradients[f2_bias_index] * tensor_b
                 optimizer.apply_gradients(zip(gradients, net1.trainable_variables))
 
             # 每 train 1000轮保存一次网络参数
@@ -800,11 +818,17 @@ def custom_dense(old_net, new_net):
   return new_fc, new_bias
 
 def change2To3(new_net, two_action_net):
+    if two_action_net.b3 != None:
+        new_net.b3.set_weights(two_action_net.b3.get_weights())
     if two_action_net.c3_1 != None:
-        new_net.c3_1.set_weights([two_action_net.c3_1.get_weights()[0], two_action_net.c3_1.get_weights()[1]])
+        new_net.c3_1.set_weights(two_action_net.c3_1.get_weights())
+    if two_action_net.b2 != None:
+        new_net.b2.set_weights(two_action_net.b2.get_weights())
     if two_action_net.c2_1 != None:
-        new_net.c2_1.set_weights([two_action_net.c2_1.get_weights()[0], two_action_net.c2_1.get_weights()[1]])
-    new_net.c1_1.set_weights([two_action_net.c1_1.get_weights()[0], two_action_net.c1_1.get_weights()[1]])
+        new_net.c2_1.set_weights(two_action_net.c2_1.get_weights())
+    new_net.b1.set_weights(two_action_net.b1.get_weights())
+    new_net.c1_1.set_weights(two_action_net.c1_1.get_weights())
+    new_net.b0.set_weights(two_action_net.b0.get_weights())
     new_net.f1.set_weights([two_action_net.f1.get_weights()[0], two_action_net.f1.get_weights()[1]])
     new_fc, new_bias = custom_dense(two_action_net, new_net=new_net)
     new_net.f2.set_weights([new_fc, new_bias])
@@ -823,11 +847,17 @@ def reverse_custom_dense(old_net, new_net):
   return new_fc, new_bias
 
 def change3To2(new_net, three_action_net):
+    if three_action_net.b3 != None:
+        new_net.b3.set_weights(three_action_net.b3.get_weights())
     if three_action_net.c3_1 != None:
-        new_net.c3_1.set_weights([three_action_net.c3_1.get_weights()[0], three_action_net.c3_1.get_weights()[1]])
+        new_net.c3_1.set_weights(three_action_net.c3_1.get_weights())
+    if three_action_net.b2 != None:
+        new_net.b2.set_weights(three_action_net.b2.get_weights())
     if three_action_net.c2_1 != None:
-        new_net.c2_1.set_weights([three_action_net.c2_1.get_weights()[0], three_action_net.c2_1.get_weights()[1]])
-    new_net.c1_1.set_weights([three_action_net.c1_1.get_weights()[0], three_action_net.c1_1.get_weights()[1]])
+        new_net.c2_1.set_weights(three_action_net.c2_1.get_weights())
+    new_net.b1.set_weights(three_action_net.b1.get_weights())
+    new_net.c1_1.set_weights(three_action_net.c1_1.get_weights())
+    new_net.b0.set_weights(three_action_net.b0.get_weights())
     new_net.f1.set_weights([three_action_net.f1.get_weights()[0], three_action_net.f1.get_weights()[1]])
     new_fc, new_bias = reverse_custom_dense(three_action_net, new_net=new_net)
     new_net.f2.set_weights([new_fc, new_bias])

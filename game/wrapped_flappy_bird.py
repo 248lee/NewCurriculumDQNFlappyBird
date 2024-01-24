@@ -4,15 +4,16 @@ import random
 import pygame
 import flappy_bird_utils
 import pygame.surfarray as surfarray
+import time
 from pygame.locals import *
 from itertools import cycle
 from enum import Enum
 
 fireReward = 0.08
 misShoot = -0.5
-shootWrong = -0.3
-sweetBoss = 0.5
-no_fire_punishment = -0.3
+shootWrong = -0.05
+sweetBoss = 0.1
+no_fire_punishment = -0.5
 
 FPS = 40000
 SCREENWIDTH  = 288
@@ -194,6 +195,7 @@ class GameState:
             if self.is_bullet_fired:
                 reward = misShoot
                 print("You should shoot something, dude? reward: ", reward)
+                self.base_situation = 2
                 self.is_hindsight = False
             self.is_bullet_fired = False
         if self.is_bullet_fired:
@@ -336,7 +338,7 @@ class GameState:
                         else:
                             self.base_situation = 2
                     else:
-                        reward =  1.5 * open_ratio**2
+                        reward =  2 * (open_ratio**2)
                         self.base_situation = 3
                     print("Big enough? reward: ", reward)
                     self.bulletx = 2 * SCREENWIDTH # only for make suring
@@ -419,6 +421,7 @@ class GameState:
         return image_data, reward, terminal, score, (self.is_boss or self.boss_afterwave_counter < self.boss_afterwave), self.is_hindsight or self.is_previous_frame_hindsight
 
 def getSimulPipe(is_guarantee_no_hole=False):
+    random.seed(time.time())
     t = random.randint(0, 1)
     if is_guarantee_no_hole:
         t=0

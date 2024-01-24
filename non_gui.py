@@ -6,7 +6,7 @@ num_of_actions = 3
 lockmode = 2
 is_simple_actions_locked = False
 is_activate_boss_memory = True
-max_steps = 180000
+max_steps = 999999
 is_sweet_boss = False
 learning_rate = 3e-6
 # End Config

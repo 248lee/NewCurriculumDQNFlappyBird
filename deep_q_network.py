@@ -571,7 +571,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         else:
             if len(hindsight_memory) > 0:
                 tmp_final_hm = hindsight_memory[len(hindsight_memory) - 1]
-                #hindsight_memory[len(hindsight_memory) - 1] = (hindsight_memory[len(hindsight_memory) - 1][0], hindsight_memory[len(hindsight_memory) - 1][1], hindsight_memory[0][2], hindsight_memory[len(hindsight_memory) - 1][3], hindsight_memory[len(hindsight_memory) - 1][4])
+                hindsight_memory[len(hindsight_memory) - 1] = (hindsight_memory[len(hindsight_memory) - 1][0], hindsight_memory[len(hindsight_memory) - 1][1], hindsight_memory[0][2], hindsight_memory[len(hindsight_memory) - 1][3], hindsight_memory[len(hindsight_memory) - 1][4])
                 hindsight_memory[0] = (hindsight_memory[0][0], hindsight_memory[0][1], tmp_final_hm[2], hindsight_memory[0][3], hindsight_memory[0][4])
                 for hm in hindsight_memory:
                     if is_activate_boss_memory:
