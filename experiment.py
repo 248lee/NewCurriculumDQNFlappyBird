@@ -206,7 +206,7 @@ def myprint(s):
     with open('structure.txt','w') as f:
         print(s, file=f)
 
-def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, isSweetBoss, max_steps, resume_Adam, learning_rate=1e-6, event=None, is_colab=False):
+def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, isSweetBoss, max_steps, resume_Adam, is_resume_RB_in_drive, learning_rate=1e-6, event=None, is_colab=False):
     hindsight_memory = []
     neuron = open("neurons.txt", 'w')
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Ask the tensorflow to shut up. IF you disable this, a bunch of logs from tensorflow will put you down when you're using colab.
@@ -371,7 +371,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         net1_target = MyNet2(net1.num_of_actions)
         if lock_mode == 0: # only new added is unlocked
             net1.c2_1.trainable = True
-            net1.b1.trainable = False
+            net1.b1.trainable = True
             net1.c1_1.trainable = False
             net1.b0.trainable = False
             net1.f1.trainable = False
@@ -485,14 +485,18 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     # 将每一轮的观测存在D中，之后训练从D中随机抽取batch个数据训练，以打破时间连续导致的相关性，保证神经网络训练所需的随机性。
     D = deque()
     D_boss = deque()
+    D_save = deque()
 
     #初始化状态并且预处理图片，把连续的四帧图像作为一个输入（State）
     do_nothing = np.zeros(num_of_actions)
     do_nothing[0] = 1
     x_t, r_0, terminal, _, _, _ = game_state.frame_step(do_nothing)
+    x_t_next = np.copy(x_t)
     x_t = cv2.cvtColor(cv2.resize(x_t, (input_sidelength[0], input_sidelength[1])), cv2.COLOR_RGB2GRAY)
+    x_t_next = cv2.cvtColor(cv2.resize(x_t_next, (next_input_sidelength[0], next_input_sidelength[1])), cv2.COLOR_RGB2GRAY)
     #ret, x_t = cv2.threshold(x_t,1,255,cv2.THRESH_BINARY)
     s_t = np.stack((x_t, x_t, x_t, x_t), axis=2)
+    s_t_next = np.stack((x_t_next, x_t_next, x_t_next, x_t_next), axis=2)
 
     rewards = []
     num_of_episode = 0
@@ -600,19 +604,24 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
 
         a_t = np.argmax(a_t_to_game, axis=0)
         x_t1 = cv2.cvtColor(cv2.resize(x_t1_colored, (input_sidelength[0], input_sidelength[1])), cv2.COLOR_RGB2GRAY)
+        x_t1_next = cv2.cvtColor(cv2.resize(x_t1_colored, (next_input_sidelength[0], next_input_sidelength[1])), cv2.COLOR_RGB2GRAY) # this is for the replay buffer that will be writen into the drive
         #ret, x_t1 = cv2.threshold(x_t1, 1, 255, cv2.THRESH_BINARY)
         x_t1 = np.reshape(x_t1, (input_sidelength[1], input_sidelength[0], 1))
+        x_t1_next = np.reshape(x_t1_next, (next_input_sidelength[1], next_input_sidelength[0], 1))
         
         #x_t_back = x_t1 * 64 + mea
         #plt.imshow(x_t_back, cmap='gray')
         #plt.savefig('game.png')
         #input()
         s_t1 = np.append(x_t1, s_t[:, :, :3], axis=2)
+        s_t1_next = np.append(x_t1_next, s_t_next[:, :, :3], axis=2)
 
         s_t_D = tf.convert_to_tensor(s_t, dtype=tf.uint8)
+        s_t_D_next = tf.convert_to_tensor(s_t_next, dtype=tf.uint8)
         a_t_D = tf.constant(a_t, dtype=tf.int32)
         r_t_D = tf.constant(r_t, dtype=tf.float32)
         s_t1_D = tf.constant(s_t1, dtype=tf.uint8)
+        s_t1_D_next = tf.convert_to_tensor(s_t1_next, dtype=tf.uint8)
         terminal = tf.constant(terminal, dtype=tf.float32)
 
         # 将观测值存入之前定义的观测存储器D中
@@ -633,6 +642,13 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 D_boss.append((s_t_D, a_t_D, r_t_D, s_t1_D, terminal))
             else:
                 D.append((s_t_D, a_t_D, r_t_D, s_t1_D, terminal))
+        if t <= OBSERVE:
+            D_save.append((s_t_D_next, a_t_D, r_t_D, s_t1_D_next, terminal))
+        else:
+            if not is_resume_RB_in_drive and t == OBSERVE + 1:
+                buffer_to_write = np.array(D_save, dtype=object) # Write the replay memory on observe to the drive
+                np.save('last_buffer', buffer_to_write)
+            D_save = None # After writing to the drive, clean the memory
         #如果D满了就替换最早的观测
         if len(D) > REPLAY_MEMORY:
             D.popleft()
@@ -641,12 +657,26 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
 
         # 更新状态，不断迭代
         s_t = s_t1
+        s_t_next = s_t1_next
         t += 1
 
         #============================ 训练网络 ===========================================
 
         # 观测一定轮数后开始训练
         if (t > OBSERVE):
+            if is_resume_RB_in_drive and t == OBSERVE + 1 and os.path.exists('last_buffer.npy'): # Load replay buffer of the last time
+                buffer_to_load = np.load('last_buffer.npy', allow_pickle=True)
+                print('load the buffer')
+                i = 0
+                for replay in buffer_to_load:
+                    tupleA = tuple([item for item in replay])
+                    D.append(tupleA)
+                    i += 1
+                    if i > OBSERVE: # The last buffer should be as same amount as the OBSERVE buffer
+                        break
+                buffer_to_load = None
+                print('Now the length of D:', len(D))
+                input()
             # Start training! Therefore we update the now_stage file
             if now_stage != stage:
                 now_stage_file = open('now_stage.txt', 'w')
