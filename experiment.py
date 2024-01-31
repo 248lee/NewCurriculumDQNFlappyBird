@@ -41,7 +41,7 @@ ACTIONS_1 = 2
 ACTIONS_2 = 3 # change to not equal 3 if you don't want action 3 to be treated specially
 ACTIONS_NAME=['不动','起飞', 'FIRE']  #动作名
 GAMMA = 0.99 # 未来奖励的衰减
-EPSILON = 0.0001
+EPSILON = 0.001
 REPLAY_MEMORY = 50000 # 观测存储器D的容量
 BATCH = 32 # 训练batch大小
 
@@ -206,7 +206,8 @@ def myprint(s):
     with open('structure.txt','w') as f:
         print(s, file=f)
 
-def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, isSweetBoss, max_steps, resume_Adam, is_resume_RB_in_drive, learning_rate=1e-6, event=None, is_colab=False):
+def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, isSweetBoss, max_steps, resume_Adam, is_resume_RB_in_drive, is_brute_exploring, learning_rate=1e-6, event=None, is_colab=False):
+    brute_exploring_rng = np.random.default_rng()
     hindsight_memory = []
     neuron = open("neurons.txt", 'w')
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Ask the tensorflow to shut up. IF you disable this, a bunch of logs from tensorflow will put you down when you're using colab.
@@ -334,7 +335,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 net1.load_weights(checkpoint_save_path,by_name=True)
             else: # Train new network for the control group
                 print('-------------train new model-------------')
-                input()
                 net1 = MyNet2(now_num_action)
                 net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
                 net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
@@ -362,7 +362,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print(net1.f2.get_weights())
             print('======================================')
             print(controlNet.f2.get_weights())
-            input()
             controlNet = None # clean the garbage
             num_actions_file = open('now_num_of_actions.txt', 'w')
             num_actions_file.write(str(ACTIONS_2))
@@ -514,6 +513,8 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     net1_target.set_weights(net1.get_weights())
     fall_action_effect_len = 20
     fall_action_effect_frame = fall_action_effect_len
+    bruted_len = 1
+    num_of_bruted_frames = 1
     # 开始训练
     while True:
         if (event != None and event.is_set()) or t > max_steps:
@@ -532,7 +533,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         a_t_to_game = np.zeros([num_of_actions])
         action_index = 0
         
-        if fall_action_effect_frame < fall_action_effect_len:
+        if fall_action_effect_frame < fall_action_effect_len: # pressing key '9' to fall <fall_action_effect_len> frames
             fall_action_effect_frame += 1
         #贪婪策略，有episilon的几率随机选择动作去探索，否则选取Q值最大的动作
         ispress = False
@@ -562,10 +563,23 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             
         if (not ispress):
             if (t > -1):
-                if random.random() <= epsilon:
-                    print("----------Random Action----------")
+                if num_of_bruted_frames < bruted_len:
+                    print("----------Bruted Random Action----------")
                     action_index = random.randrange(num_of_actions)
                     a_t_to_game[action_index] = 1
+                    num_of_bruted_frames += 1
+                elif random.random() <= epsilon:
+                    if is_brute_exploring:
+                        print("----------Start Brute Exploring----------")
+                        bruted_len = (int)(brute_exploring_rng.uniform(low=1, high=10))
+                        num_of_bruted_frames = 0
+                        action_index = random.randrange(num_of_actions)
+                        a_t_to_game[action_index] = 1
+                        num_of_bruted_frames += 1
+                    else:
+                        print("----------Random Action----------")
+                        action_index = random.randrange(num_of_actions)
+                        a_t_to_game[action_index] = 1
                 else:
                     print("-----------net choice----------------")
                     action_index = np.argmax(readout_t)
@@ -642,13 +656,14 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 D_boss.append((s_t_D, a_t_D, r_t_D, s_t1_D, terminal))
             else:
                 D.append((s_t_D, a_t_D, r_t_D, s_t1_D, terminal))
-        if t <= OBSERVE:
-            D_save.append((s_t_D_next, a_t_D, r_t_D, s_t1_D_next, terminal))
-        else:
-            if not is_resume_RB_in_drive and t == OBSERVE + 1:
-                buffer_to_write = np.array(D_save, dtype=object) # Write the replay memory on observe to the drive
-                np.save('last_buffer', buffer_to_write)
-            D_save = None # After writing to the drive, clean the memory
+        # if t <= OBSERVE:
+        #     #D_save.append((s_t_D_next, a_t_D, r_t_D, s_t1_D_next, terminal))
+        # else:
+        #     if not is_resume_RB_in_drive and t == OBSERVE + 1:
+        #         buffer_to_write = np.array(D_save, dtype=object) # Write the replay memory on observe to the drive
+        #         np.save('last_buffer', buffer_to_write)
+        #     buffer_to_write = None
+        #     D_save = None # After writing to the drive, clean the memory
         #如果D满了就替换最早的观测
         if len(D) > REPLAY_MEMORY:
             D.popleft()
@@ -689,7 +704,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print("==================start train====================")
             print("Boss length", len(D_boss))
             num_of_boss_batch = int(BATCH * 1 / 2)
-            if len(D_boss) <= 500:
+            if len(D_boss) <= 3000:
                 minibatch = random.sample(D, BATCH)
             else:
                 minibatch = random.sample(D, BATCH - num_of_boss_batch)

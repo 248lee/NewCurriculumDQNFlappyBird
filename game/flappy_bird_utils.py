@@ -14,6 +14,7 @@ def load():
     # path of pipe
     PIPE_PATH = 'assets/sprites/pipe-green.png'
     PIPE_PATH2 = 'assets/sprites/pipe-green2.png'
+    PIPE_PATH_BOSS = 'assets/sprites/pipe-green-boss.png'
 
     # path of bullet
     BULLET_PATH = 'assets/sprites/bullet2.png'
@@ -77,6 +78,11 @@ def load():
         pygame.transform.rotate(
             pygame.image.load(PIPE_PATH2).convert_alpha(), 180),
         pygame.image.load(PIPE_PATH2).convert_alpha(),
+    )
+    IMAGES['pipe_boss'] = (
+        pygame.transform.rotate(
+            pygame.image.load(PIPE_PATH_BOSS).convert_alpha(), 180),
+        pygame.image.load(PIPE_PATH_BOSS).convert_alpha(),
     )
 
     IMAGES['bullet'] = pygame.image.load(BULLET_PATH).convert_alpha()

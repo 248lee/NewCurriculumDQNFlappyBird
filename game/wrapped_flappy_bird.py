@@ -11,7 +11,7 @@ from enum import Enum
 
 fireReward = 0.08
 misShoot = -0.5
-shootWrong = -0.05
+shootWrong = -0.1
 sweetBoss = 0.1
 no_fire_punishment = -0.5
 
@@ -315,7 +315,7 @@ class GameState:
                 if self.playery > PLAYER_HEIGHT / 2 + 7:
                     reward = sweetBoss
                 else:
-                    reward = -1
+                    reward = -2.87
             else:
                 reward = -1
             self.__init__(self.isSweetBoss)
@@ -380,8 +380,12 @@ class GameState:
 
         for uPipe, lPipe in zip(self.upperPipes, self.lowerPipes):
             if uPipe['type'] == 0:
-                SCREEN.blit(IMAGES['pipe'][0], (uPipe['x'], uPipe['y']))
-                SCREEN.blit(IMAGES['pipe'][1], (lPipe['x'], lPipe['y']))
+                if uPipe['action'] == 1:
+                    SCREEN.blit(IMAGES['pipe_boss'][0], (uPipe['x'], uPipe['y']))
+                    SCREEN.blit(IMAGES['pipe_boss'][1], (lPipe['x'], lPipe['y']))
+                else:
+                    SCREEN.blit(IMAGES['pipe'][0], (uPipe['x'], uPipe['y']))
+                    SCREEN.blit(IMAGES['pipe'][1], (lPipe['x'], lPipe['y']))
             else:
                 SCREEN.blit(IMAGES['pipe2'][0], (uPipe['x'], uPipe['y']))
                 SCREEN.blit(IMAGES['pipe2'][1], (lPipe['x'], lPipe['y']))
@@ -408,8 +412,9 @@ class GameState:
                 #SOUNDS['point'].play() #disable it if you do not need sound
                 print("Good! reward: ", reward)
                 if pipe['action'] == 1:
+                    if self.base_situation != 2:
+                        reward = sweetBoss
                     self.base_situation = 0
-                    reward = sweetBoss
                 else:
                     reward = 1
         score = self.score
