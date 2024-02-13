@@ -212,7 +212,7 @@ class MyWindow(QWidget):
 
     def run_train_network(self, stage, num_of_actions, lockmode, is_simple_locked, is_activate_boss_memory, is_inherit_checkpoint, is_sweet_boss, max_steps, is_RB_resumed, is_brute_exploring, lr, event : threading.Event):
         self.check_image_modification()
-        from experiment import trainNetwork
+        from deep_q_network import trainNetwork
         print(f"Training Network with stage={stage}, is_simple_locked={is_simple_locked}")
         last_steps = self.read_last_old_time()
         training_param_history_file = open('training_history.txt', 'a')

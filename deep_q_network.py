@@ -1,8 +1,8 @@
 #!/usr/bin/env python
+# This is modified by johnlee's nb!
 #============================ 导入所需的库 ===========================================
 from __future__ import print_function
 import os 
-from lockweightdense import LockedWeightsDense
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Ask the tensorflow to shut up. IF you disable this, a bunch of logs from tensorflow will put you down when you're using colab.
 import tensorflow as tf
 from threading import Event
@@ -16,8 +16,13 @@ from collections import deque
 import matplotlib.pyplot as plt
 import argparse
 import pygame
+from sklearn.cluster import KMeans
+from scipy.interpolate import RegularGridInterpolator
 os.environ['CUDA_VISIBLE_DEVICES']='0'
 
+conv3_num_of_filters = 32
+conv2_num_of_filters = 32
+conv1_num_of_filters = 32
 
 # parser = argparse.ArgumentParser()
 # parser.add_argument('--isTrain', type=bool, default=True)
@@ -32,7 +37,8 @@ os.environ['CUDA_VISIBLE_DEVICES']='0'
 # isTrain = args.isTrain
 OBSERVE = 10000 # 训练前观察积累的轮数
 
-side_length_each_stage = [(0, 0), (40, 40), (80, 80), (160, 160)]
+side_length_each_stage = [(0, 0), (50, 50), (100, 100), (100, 100), (100, 100)]
+num_of_channels = 4
 sys.path.append("game/")
 import wrapped_flappy_bird as game
 tf.debugging.set_log_device_placement(True)
@@ -54,13 +60,18 @@ class MyNet(Model):
         self.c2_1 = None
         super(MyNet, self).__init__()
         self.num_of_actions = num_of_actions
-        self.b1 = BatchNormalization(name='batch1')  # BN层
-        self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
+        self.b1 = None#BatchNormalization(name='batch1')  # BN层
+        self.c1_1 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b0 = BatchNormalization(name='batch0')  # BN层
+        self.b0 = None#BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
+        self.c1_2 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1_2', 
+                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
+                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
+        self.a1_2 = Activation('relu', name='relu_1_2')  # 激活层
+        self.p1_2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1_2')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -73,13 +84,15 @@ class MyNet(Model):
 
     def call(self, x):
         #print(x.shape)
-        x = self.b1(x)
+        #x = self.b1(x)
         x = self.c1_1(x)
         #print(x.shape)
-        x = self.b0(x)
+        #x = self.b0(x)
         x = self.a1_1(x)
         x = self.p1(x)
-
+        x = self.c1_2(x)
+        x = self.a1_2(x)
+        x = self.p1_2(x)
         x = self.flatten(x)
         x = self.f1(x)
         y = self.f2(x)
@@ -87,27 +100,37 @@ class MyNet(Model):
     
     
 class MyNet2(Model):
-    def __init__(self, num_of_actions):
+    def __init__(self, num_of_actions, stage1_net=None):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
+        super(MyNet2, self).__init__()
         self.b3 = None
         self.c3_1 = None
-        super(MyNet2, self).__init__()
-        self.b2 = BatchNormalization(name='batch2')  # BN层
+        self.b2 = None#BatchNormalization(name='batch2')  # BN层
         self.num_of_actions = num_of_actions
-        self.conv2_num_of_filters = 32
-        self.c2_1 = Conv2D(filters=self.conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2',
+        self.c2_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b1 = BatchNormalization(name='batch1')  # BN层
+        self.b1 = None#BatchNormalization(name='batch1')  # BN层
         self.a2_1 = Activation('relu', name='relu_2')  # 激活层
         
         self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
-        self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
+        if stage1_net == None:
+            self.c1_1 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b0 = BatchNormalization(name='batch0')  # BN层
+        else:
+            multiplier = num_of_channels / conv2_num_of_filters # 2 / 32, the 16 of 1 / 16 means that the input channel is 16 times larger
+            self.c1_1 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
+                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=np.mean(stage1_net.c1_1.get_weights()[0]) * multiplier, stddev=np.std(stage1_net.c1_1.get_weights()[0]) * multiplier, seed=None),
+                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
+        self.b0 = None#BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
+        self.c1_2 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1_2', 
+                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
+                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
+        self.a1_2 = Activation('relu', name='relu_1_2')  # 激活层
+        self.p1_2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1_2')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -117,56 +140,77 @@ class MyNet2(Model):
         self.f2 = Dense(num_of_actions, activation=None, name='dense2',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))
+        self.is_going_to_load_previous_stage = not (stage1_net == None)
     def call(self, x):
-        x = self.b2(x)
+        #x = self.b2(x)
         x = self.c2_1(x)
-        x = self.b1(x)
+        #x = self.b1(x)
         x = self.a2_1(x)
         x = self.p2(x)
         x = self.c1_1(x)
-        x = self.b0(x)
+        #x = self.b0(x)
         x = self.a1_1(x)
         x = self.p1(x)
+        x = self.c1_2(x)
+        x = self.a1_2(x)
+        x = self.p1_2(x)
 
         x = self.flatten(x)
         x = self.f1(x)
         y = self.f2(x)
         return y
+                    
+
     def load_stage1(self, stage1_net):
-        new_kernel = custom_kernel_stage2(stage1_net, self.conv2_num_of_filters // 4)
-        self.c1_1.set_weights([new_kernel, stage1_net.c1_1.get_weights()[1]])
+        if not self.is_going_to_load_previous_stage:
+            print("ERROR! You should provide stage1_net when calling the constructor of MyNet2!!")
+            input()
+            return
+        interpolated_kernel, k_bias = john_bilinear(stage1_net.c1_1.get_weights()[0], stage1_net.c1_1.get_weights()[1], conv2_num_of_filters)
+        # new_kernel = custom_kernel_stage2(self.stage1_net, self.conv2_num_of_filters)
+        # self.c1_1.set_weights([new_kernel, self.stage1_net.c1_1.get_weights()[1]])
+        self.c2_1.set_weights([interpolated_kernel, k_bias])
+        self.c1_2.set_weights(stage1_net.c1_2.get_weights())
         self.f1.set_weights([stage1_net.f1.get_weights()[0], stage1_net.f1.get_weights()[1]])
         self.f2.set_weights(stage1_net.f2.get_weights())
         return
     
 class MyNet3(Model):
-    def __init__(self, num_of_actions):
+    def __init__(self, num_of_actions, stage2_net=None):
+        '''These are for the generalization of the function change2To3(new_net, old_net)'''
         super(MyNet3, self).__init__()
         self.num_of_actions = num_of_actions
-        self.conv3_num_of_filters = 32
-        self.b3 = BatchNormalization(name='batch3')  # BN层
-        self.c3_1 = Conv2D(filters=self.conv3_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_3',
+        self.b3 = None#BatchNormalization(name='batch2')  # BN层
+        self.c3_1 = Conv2D(filters=conv3_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_3',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b1 = BatchNormalization(name='batch2')  # BN层
         self.a3_1 = Activation('relu', name='relu_3')  # 激活层
-        
-        self.p3 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_3')  # 池化层
-
-
-        self.c2_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_2',
+        # No maxpool here
+        self.b2 = None#BatchNormalization(name='batch2')  # BN层
+        self.c2_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b1 = BatchNormalization(name='batch1')  # BN层
+        self.b1 = None#BatchNormalization(name='batch1')  # BN层
         self.a2_1 = Activation('relu', name='relu_2')  # 激活层
         
         self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
-        self.c1_1 = Conv2D(filters=32, kernel_size=(3, 3), padding='same', name='conv_1', 
+        if stage2_net == None:
+            self.c1_1 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b0 = BatchNormalization(name='batch0')  # BN层
+        else:
+            multiplier = num_of_channels / conv3_num_of_filters # 2 / 32, the 16 of 1 / 16 means that the input channel is 16 times larger
+            self.c1_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
+                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=np.mean(stage2_net.c1_1.get_weights()[0]) * multiplier, stddev=np.std(stage2_net.c1_1.get_weights()[0]) * multiplier, seed=None),
+                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
+        self.b0 = None#BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
+        self.c1_2 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1_2', 
+                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
+                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
+        self.a1_2 = Activation('relu', name='relu_1_2')  # 激活层
+        self.p1_2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1_2')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -176,32 +220,43 @@ class MyNet3(Model):
         self.f2 = Dense(num_of_actions, activation=None, name='dense2',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))
-        
+        self.is_going_to_load_previous_stage = not (stage2_net == None)
     def call(self, x):
+        #x = self.b3(x)
         x = self.c3_1(x)
+        #x = self.b2(x)
         x = self.a3_1(x)
-        x = self.p3(x)
-
         x = self.c2_1(x)
+        #x = self.b1(x)
         x = self.a2_1(x)
         x = self.p2(x)
-
         x = self.c1_1(x)
+        #x = self.b0(x)
         x = self.a1_1(x)
         x = self.p1(x)
-
+        x = self.c1_2(x)
+        x = self.a1_2(x)
+        x = self.p1_2(x)
         x = self.flatten(x)
         x = self.f1(x)
         y = self.f2(x)
         return y
+                    
+
     def load_stage2(self, stage2_net):
-        new_kernel = custom_kernel_stage3(stage2_net, self.conv3_num_of_filters // 4)
-        self.c2_1.set_weights([new_kernel, stage2_net.c2_1.get_weights()[1]])        
-        self.c1_1.set_weights([stage2_net.c1_1.get_weights()[0], stage2_net.c1_1.get_weights()[1]])
+        if not self.is_going_to_load_previous_stage:
+            print("ERROR! You should provide stage1_net when calling the constructor of MyNet2!!")
+            input()
+            return
+        interpolated_kernel, k_bias = john_bilinear(stage2_net.c2_1.get_weights()[0], stage2_net.c2_1.get_weights()[1], new_num_of_kernels=conv3_num_of_filters)
+        # new_kernel = custom_kernel_stage2(self.stage1_net, self.conv2_num_of_filters)
+        # self.c1_1.set_weights([new_kernel, self.stage1_net.c1_1.get_weights()[1]])
+        self.c3_1.set_weights([interpolated_kernel, k_bias])
+        self.c1_1.set_weights(stage2_net.c1_1.get_weights())
+        self.c1_2.set_weights(stage2_net.c1_2.get_weights())
         self.f1.set_weights([stage2_net.f1.get_weights()[0], stage2_net.f1.get_weights()[1]])
         self.f2.set_weights(stage2_net.f2.get_weights())
         return
-
 def myprint(s):
     with open('structure.txt','w') as f:
         print(s, file=f)
@@ -260,37 +315,27 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     if stage == 1:
         optimizer = tf.keras.optimizers.Adam(learning_rate = learning_rate, epsilon=1e-08)
         net1 = MyNet(now_num_action)
-        net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-        net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+        net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+        net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
         if os.path.exists(checkpoint_save_path):
             print('-------------load the model-----------------')
             net1.load_weights(checkpoint_save_path,by_name=True)
         else:
             # Create the experimenting network for the control group
-            net2_2action = MyNet2(ACTIONS_1) # First, we create a stage2 network with only two actions
-            net2_2action.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
-            net2_2action.load_stage1(net1) # We let the stage2-two-action-network to load the weights of the normal network
-            net2_2action.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
             net2 = MyNet2(ACTIONS_2)
-            net2.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
-            net2.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
-            change2To3(net2, net2_2action) # Then, we add the third action to the ControlGroup
+            net2.build(input_shape=(1, next_input_sidelength[0] * 4, next_input_sidelength[1], num_of_channels))
+            net2.call(Input(shape=(next_input_sidelength[0] * 4, next_input_sidelength[1], num_of_channels)))
             net2.save_weights('model/ControlGroup.h5',save_format='h5') # Finally, save it
             net2_2action = None # Clean the garbage
             print('-------------train new model-----------------')
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
-            controlNet = MyNet2(num_of_actions) # Since the control net is at stage2, we need to create it additionally
-            controlNet.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
-            controlNet.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
-            controlNet.load_weights('model/ControlGroup.h5', by_name=True)
             new_net1 = MyNet(num_of_actions) # This is the new three-actions-net
-            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            new_net1.f2.set_weights([controlNet.f2.get_weights()[0], controlNet.f2.get_weights()[1]]) # load the weights of the third action from the control network
+            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels)) # This is the new three-action net
+            new_net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
             change2To3(new_net1, net1) # load the weights of the original network
             net1 = new_net1
-            controlNet = None # clean the garbage
             num_actions_file = open('now_num_of_actions.txt', 'w')
             num_actions_file.write(str(ACTIONS_2))
             num_actions_file.close()
@@ -299,9 +344,9 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         now_stage_file.close()
         net1_target = MyNet(net1.num_of_actions)
         if lock_mode == 1: # only fc is unlocked
-            net1.b1.trainable = False
+            #net1.b1.trainable = False
             net1.c1_1.trainable = False
-            net1.b0.trainable = False
+            #net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = True
         
@@ -310,49 +355,46 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         net1 = None     
         if stage > now_stage:
             stage1_net = MyNet(now_num_action)
-            stage1_net.build(input_shape=(1, last_input_sidelength[0], last_input_sidelength[1], 4))
-            stage1_net.call(Input(shape=(last_input_sidelength[0], last_input_sidelength[1], 4)))
+            stage1_net.build(input_shape=(1, last_input_sidelength[0] , last_input_sidelength[1], num_of_channels))
+            stage1_net.call(Input(shape=(last_input_sidelength[0] , last_input_sidelength[1], num_of_channels)))
             if os.path.exists(checkpoint_save_path):
                 print('-------------load the model and modify to stage2----------------')
                 stage1_net.load_weights(checkpoint_save_path,by_name=True)
-                net1 = MyNet2(now_num_action)
-                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-                net1.load_weights('model/ControlGroup.h5') # Load the weights of the control network in order to gain the c2_1
+                net1 = MyNet2(now_num_action, stage1_net)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                #net1.load_weights('model/ControlGroup.h5') # Load the weights of the control network in order to gain the c2_1
                 net1.load_stage1(stage1_net) # Load the weights of the original network
-                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+                # print(np.mean(stage1_net.c1_1.get_weights()[0]))
+                # print(np.mean(net1.c1_1.get_weights()[0]) * 16)
+                # input()    
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
             else: # Train new network for the control group
                 net1 = MyNet2(now_num_action)
-                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-                net1.load_weights('model/ControlGroup.h5')
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
+                #net1.load_weights('model/ControlGroup.h5')
 
         else:
             net1 = MyNet2(now_num_action)
-            net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+            net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+            net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
             if os.path.exists(checkpoint_save_path):
                 print('-------------load the model-----------------')
                 net1.load_weights(checkpoint_save_path,by_name=True)
             else: # Train new network for the control group
                 print('-------------train new model-------------')
                 net1 = MyNet2(now_num_action)
-                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-                net2 = MyNet2(ACTIONS_2)
-                net2.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-                net2.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-                net2.load_weights('model/ControlGroup.h5')
-                change3To2(net1, net2)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
+                # net2 = MyNet2(ACTIONS_2)
+                # net2.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                # net2.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
+                # change3To2(net1, net2)
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
-            controlNet = MyNet2(num_of_actions) # Since the control net is at stage2, we need to create it additionally
-            controlNet.build(input_shape=(1, next_input_sidelength[0], next_input_sidelength[1], 4))
-            controlNet.call(Input(shape=(next_input_sidelength[0], next_input_sidelength[1], 4)))
-            controlNet.load_weights('model/ControlGroup.h5', by_name=True)
             new_net1 = MyNet2(num_of_actions) # This is the new three-actions-net
-            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4)) # load the weights of the third action from the control network
-            new_net1.f2.set_weights([controlNet.f2.get_weights()[0], controlNet.f2.get_weights()[1]])
+            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels)) # load the weights of the third action from the control network
             change2To3(new_net1, net1) # load the weights of the original network
             print(net1.c1_1.get_weights())
             print(net1.f2.get_weights())
@@ -361,92 +403,122 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print(net1.c1_1.get_weights())
             print(net1.f2.get_weights())
             print('======================================')
-            print(controlNet.f2.get_weights())
-            controlNet = None # clean the garbage
             num_actions_file = open('now_num_of_actions.txt', 'w')
             num_actions_file.write(str(ACTIONS_2))
             num_actions_file.close()
 
         net1_target = MyNet2(net1.num_of_actions)
         if lock_mode == 0: # only new added is unlocked
-            net1.c2_1.trainable = True
-            net1.b1.trainable = True
-            net1.c1_1.trainable = False
-            net1.b0.trainable = False
+            #net1.b2.trainable = True
+            net1.c2_1.trainable = False
+            #net1.b1.trainable = False
+            net1.c1_1.trainable = True
+            net1.c1_2.trainable = False
+            #net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = False
         elif lock_mode == 1: # only fc is unlocked
-            net1.b2.trainable = False
+            #net1.b2.trainable = False
             net1.c2_1.trainable = False
-            net1.b1.trainable = False
+            #net1.b1.trainable = False
             net1.c1_1.trainable = False
-            net1.b0.trainable = False
+            net1.c1_2.trainable = False
+            #net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = True
         elif lock_mode == 2: # everything is unlocked
             net1.c2_1.trainable = True
             net1.c1_1.trainable = True
+            net1.c1_2.trainable = True
             net1.f1.trainable = True
             net1.f2.trainable = True
 
 
     elif stage == 3:
-        optimizer = tf.keras.optimizers.Adam(learning_rate = learning_rate, epsilon=1e-08)                
+        optimizer = tf.keras.optimizers.Adam(learning_rate = learning_rate, epsilon=1e-08)           
+        net1 = None     
         if stage > now_stage:
             stage2_net = MyNet2(now_num_action)
-            stage2_net.build(input_shape=(1, last_input_sidelength[0], last_input_sidelength[1], 4))
-            stage2_net.call(Input(shape=(last_input_sidelength[0], last_input_sidelength[1], 4)))
+            stage2_net.build(input_shape=(1, last_input_sidelength[0] , last_input_sidelength[1], num_of_channels))
+            stage2_net.call(Input(shape=(last_input_sidelength[0] , last_input_sidelength[1], num_of_channels)))
             if os.path.exists(checkpoint_save_path):
-                print('-------------load the model and modify to stage3-----------------')
+                print('-------------load the model and modify to stage3----------------')
                 stage2_net.load_weights(checkpoint_save_path,by_name=True)
-            else:
-                print("NO pretrained model to load! Pleast train stage1 first!")
-                return
+                net1 = MyNet3(now_num_action, stage2_net)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                #net1.load_weights('model/ControlGroup.h5') # Load the weights of the control network in order to gain the c2_1
+                net1.load_stage2(stage2_net) # Load the weights of the original network
+                # print(np.mean(stage1_net.c1_1.get_weights()[0]))
+                # print(np.mean(net1.c1_1.get_weights()[0]) * 16)
+                # input()    
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
+            else: # Train new network for the control group
+                net1 = MyNet3(now_num_action)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
 
-            net1 = MyNet3(now_num_action)
-            net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            net1.load_stage2(stage2_net)
-            net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
         else:
             net1 = MyNet3(now_num_action)
-            net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+            net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+            net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
             if os.path.exists(checkpoint_save_path):
                 print('-------------load the model-----------------')
                 net1.load_weights(checkpoint_save_path,by_name=True)
-            else:
-                print("NO pretrained model to load! Pleast train stage1 first!")
-                return
+            else: # Train new network for the control group
+                print('-------------train new model-------------')
+                net1 = MyNet3(now_num_action)
+                net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
+                net2 = MyNet3(ACTIONS_2)
+                net2.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+                net2.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
+                net2.load_weights('model/ControlGroup.h5')
+                change3To2(net1, net2)
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
-            new_net1 = MyNet3(num_of_actions)
-            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-            new_net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
-            new_net1.summary(print_fn=myprint)
-            change2To3(new_net1, net1)
+            new_net1 = MyNet3(num_of_actions) # This is the new three-actions-net
+            new_net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 1)) # load the weights of the third action from the control network
+            change2To3(new_net1, net1) # load the weights of the original network
+            print(net1.c1_1.get_weights())
+            print(net1.f2.get_weights())
+            print('======================================')
             net1 = new_net1 # Update the net1 to the THREE-actinos version
+            print(net1.c1_1.get_weights())
+            print(net1.f2.get_weights())
+            print('======================================')
             num_actions_file = open('now_num_of_actions.txt', 'w')
-            num_actions_file.write(str(num_of_actions))
+            num_actions_file.write(str(ACTIONS_2))
             num_actions_file.close()
 
         net1_target = MyNet3(net1.num_of_actions)
         if lock_mode == 0: # only new added is unlocked
-            net1.c3_1.trainable = True
-            net1.c2_1.trainable = False
+            #net1.b3.trainable = True
+            net1.c3_1.trainable = False
+            #net1.b2.trainable = True
+            net1.c2_1.trainable = True
+            #net1.b1.trainable = False
             net1.c1_1.trainable = False
+            net1.c1_2.trainable = False
+            #net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = False
         elif lock_mode == 1: # only fc is unlocked
+            #net1.b3.trainable = True
             net1.c3_1.trainable = False
+            #net1.b2.trainable = False
             net1.c2_1.trainable = False
+            #net1.b1.trainable = False
             net1.c1_1.trainable = False
+            net1.c1_2.trainable = False
+            #net1.b0.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = True
         elif lock_mode == 2: # everything is unlocked
             net1.c3_1.trainable = True
             net1.c2_1.trainable = True
             net1.c1_1.trainable = True
+            net1.c1_2.trainable = True
             net1.f1.trainable = True
             net1.f2.trainable = True
 
@@ -490,6 +562,16 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     do_nothing = np.zeros(num_of_actions)
     do_nothing[0] = 1
     x_t, r_0, terminal, _, _, _ = game_state.frame_step(do_nothing)
+    '''# x_t_next = np.copy(x_t)
+    # x_t = cv2.resize(x_t, (input_sidelength[1], input_sidelength[0]))
+    # #x_t = np.stack((cv2.cvtColor(x_t, cv2.COLOR_RGB2GRAY), x_t[:, :, 0], x_t[:, :, 1]), axis=2)
+    # x_t = (cv2.cvtColor(x_t, cv2.COLOR_RGB2GRAY)).reshape((input_sidelength[0], input_sidelength[1], 1))
+    # x_t_next = cv2.resize(x_t_next, (next_input_sidelength[1], next_input_sidelength[0]))
+    # # x_t_next = np.stack((cv2.cvtColor(x_t_next, cv2.COLOR_RGB2GRAY), x_t_next[:, :, 0], x_t_next[:, :, 1]),  axis=2)
+    # x_t_next = (cv2.cvtColor(x_t_next, cv2.COLOR_RGB2GRAY)).reshape((next_input_sidelength[0], next_input_sidelength[1], 1))
+    # #ret, x_t = cv2.threshold(x_t,1,255,cv2.THRESH_BINARY)
+    # s_t = np.concatenate((x_t, x_t, x_t, x_t), axis=0)
+    # s_t_next = np.concatenate((x_t_next, x_t_next, x_t_next, x_t_next), axis=0)'''
     x_t_next = np.copy(x_t)
     x_t = cv2.cvtColor(cv2.resize(x_t, (input_sidelength[0], input_sidelength[1])), cv2.COLOR_RGB2GRAY)
     x_t_next = cv2.cvtColor(cv2.resize(x_t_next, (next_input_sidelength[0], next_input_sidelength[1])), cv2.COLOR_RGB2GRAY)
@@ -508,8 +590,11 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     avg_scores_1000steps = []
 
     t_train = 0
-    net1_target.build(input_shape=(1, input_sidelength[0], input_sidelength[1], 4))
-    net1_target.call(Input(shape=(input_sidelength[0], input_sidelength[1], 4)))
+    net1_target.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
+    net1_target.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
+    # net1_target.summary()
+    # net1.summary()
+    # input()
     net1_target.set_weights(net1.get_weights())
     fall_action_effect_len = 20
     fall_action_effect_frame = fall_action_effect_len
@@ -519,12 +604,12 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     while True:
         if (event != None and event.is_set()) or t > max_steps:
             print(net1.f2.get_weights()[0])
+            print(t, max_steps)
             print("stupid python")
             neuron.write(str(net1.f2.get_weights()[0]))
             neuron.close()
             game_state.closeGame() # python is trash
             break
-            #exit(0)
         # 根据输入的s_t,选择一个动作a_t
         
         readout_t = net1(tf.expand_dims(tf.constant(s_t, dtype=tf.float32), 0), training=False)
@@ -565,8 +650,9 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             if (t > -1):
                 if num_of_bruted_frames < bruted_len:
                     print("----------Bruted Random Action----------")
-                    action_index = random.randrange(num_of_actions)
-                    a_t_to_game[action_index] = 1
+                    # action_index = random.randrange(num_of_actions)
+                    # a_t_to_game[action_index] = 1
+                    a_t_to_game[0] = 1
                     num_of_bruted_frames += 1
                 elif random.random() <= epsilon:
                     if is_brute_exploring:
@@ -596,7 +682,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                         ispress = True
                 else:
                     a_t_to_game[i] = 0
-
+    
 
         #执行这个动作并观察下一个状态以及reward
         x_t1_colored, r_t, terminal, score, is_boss, is_hindsight = game_state.frame_step(a_t_to_game)
@@ -617,6 +703,25 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             rank_file_w.close()
 
         a_t = np.argmax(a_t_to_game, axis=0)
+        '''# x_t1 = cv2.resize(x_t1_colored, (input_sidelength[1], input_sidelength[0]))
+        # # plt.imshow(cv2.cvtColor(x_t1, cv2.COLOR_RGB2GRAY), cmap='gray')
+        # # plt.savefig('game.png')
+        # # input()
+        # # x_t1 = np.stack((cv2.cvtColor(x_t1, cv2.COLOR_RGB2GRAY), x_t1[:, :, 0], x_t1[:, :, 1]), axis=2)
+        # x_t1 = (cv2.cvtColor(x_t1, cv2.COLOR_RGB2GRAY)).reshape((input_sidelength[0], input_sidelength[1], 1))
+        # x_t1_next = cv2.resize(x_t1_colored, (next_input_sidelength[1], next_input_sidelength[0])) # this is for the replay buffer that will be writen into the drive
+        # # x_t1_next = np.stack((cv2.cvtColor(x_t1_next, cv2.COLOR_RGB2GRAY), x_t1_next[:, :, 0], x_t1_next[:, :, 1]), axis=2)
+        # x_t1_next = ((cv2.cvtColor(x_t1_next, cv2.COLOR_RGB2GRAY))).reshape((next_input_sidelength[0], next_input_sidelength[1], 1))
+        
+        # #ret, x_t1 = cv2.threshold(x_t1, 1, 255, cv2.THRESH_BINARY)
+        
+        # #x_t_back = x_t1 * 64 + mea
+        
+        # s_t1 = s_t[(input_sidelength[0]):] # Delete the first 40(80) rows, which indicates the eldest frame
+        # s_t1_next = s_t_next[(next_input_sidelength[0]):]
+        # s_t1 = np.concatenate((s_t1, x_t1), axis=0)
+        # s_t1_next = np.concatenate((s_t1_next, x_t1_next), axis=0)'''
+
         x_t1 = cv2.cvtColor(cv2.resize(x_t1_colored, (input_sidelength[0], input_sidelength[1])), cv2.COLOR_RGB2GRAY)
         x_t1_next = cv2.cvtColor(cv2.resize(x_t1_colored, (next_input_sidelength[0], next_input_sidelength[1])), cv2.COLOR_RGB2GRAY) # this is for the replay buffer that will be writen into the drive
         #ret, x_t1 = cv2.threshold(x_t1, 1, 255, cv2.THRESH_BINARY)
@@ -733,7 +838,18 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             b_done = [d[4] for d in minibatch]
             b_done = tf.stack(b_done, axis=0)
 
-            q_next = tf.reduce_max(net1_target(b_s_, training=True), axis=1)
+            """
+            Below is for the Double DQN
+            """
+            online_readout_t = net1(b_s_, training=True)
+            online_action = np.argmax(online_readout_t, axis=1, keepdims=True) # shape: (BATCH, )
+            # print(online_action.shape)
+            # print(b_a.shape)
+            target_q_output = net1_target(b_s_, training=True)
+            target_index = tf.expand_dims(tf.constant(np.arange(0, BATCH), dtype=tf.int32), 1)
+            target_index_b_a = tf.concat((target_index, online_action), axis=1)
+            q_next = tf.gather_nd(target_q_output, target_index_b_a) # shape: (BATCH, )
+            # q_next = tf.reduce_max(net1_target(b_s_, training=True), axis=1) # shape: (BATCH, )
             q_truth = b_r + GAMMA * q_next* (tf.ones(BATCH) - b_done)
 
             # 训练
@@ -835,6 +951,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         # Count episodes
         if terminal:
             num_of_episode = num_of_episode + 1
+        print("D's length:", len(D))
         
 
 
@@ -842,8 +959,8 @@ def custom_kernel_stage2(old_net, thickness):
     old_kernel = old_net.c1_1.get_weights()[0].T
     new_kernel = []
     for i in range(len(old_kernel)):
-        tmp = old_kernel[i]
-        tmp_stack = np.array([tmp for i in range(thickness)])
+        tmp = old_kernel[i] / 32
+        tmp_stack = np.array([tmp for _ in range(thickness)])
         sh = tmp_stack.shape
         tmp_stack = tmp_stack.reshape((sh[0] * sh[1], sh[2], sh[3]))
         new_kernel.append(tmp_stack)
@@ -871,9 +988,10 @@ def change2To3(new_net, two_action_net):
         new_net.b2.set_weights(two_action_net.b2.get_weights())
     if two_action_net.c2_1 != None:
         new_net.c2_1.set_weights(two_action_net.c2_1.get_weights())
-    new_net.b1.set_weights(two_action_net.b1.get_weights())
+    #new_net.b1.set_weights(two_action_net.b1.get_weights())
     new_net.c1_1.set_weights(two_action_net.c1_1.get_weights())
-    new_net.b0.set_weights(two_action_net.b0.get_weights())
+    new_net.c1_2.set_weights(two_action_net.c1_2.get_weights())
+    #new_net.b0.set_weights(two_action_net.b0.get_weights())
     new_net.f1.set_weights([two_action_net.f1.get_weights()[0], two_action_net.f1.get_weights()[1]])
     new_fc, new_bias = custom_dense(two_action_net, new_net=new_net)
     new_net.f2.set_weights([new_fc, new_bias])
@@ -917,6 +1035,71 @@ def custom_kernel_stage3(old_net, thickness):
         tmp_stack = tmp_stack.reshape((sh[0] * sh[1], sh[2], sh[3]))
         new_kernel.append(tmp_stack)
     return (np.array(new_kernel).T)
+
+def john_bilinear(oarr, obias, new_num_of_kernels):
+  print(obias.shape)
+  num_of_kernels = oarr.shape[3]
+  interpolated_kernels = []
+  for i in range(num_of_kernels):
+    num_of_channels = oarr.T[i].shape[0]
+    interpolated_piece = []
+    for j in range(num_of_channels):
+      old_kernel = oarr.T[i][j]
+      # print(old_kernel)
+      from scipy.interpolate import RegularGridInterpolator
+      x = np.linspace(0, 1, old_kernel.shape[0])
+      y = np.linspace(0, 1, old_kernel.shape[1])
+
+      interp = RegularGridInterpolator((x, y), old_kernel)
+
+      x_i = np.linspace(0, 1, old_kernel.shape[0] * 2) # therefore, the shape of the interpolated kernel must be even, because of * 2
+      y_i = np.linspace(0, 1, old_kernel.shape[1] * 2)
+      x_i, y_i = np.meshgrid(x_i, y_i)
+      points = np.vstack([x_i.ravel(), y_i.ravel()]).T
+      z_i = interp(points)
+      z_i = z_i.reshape(x_i.shape)
+      interpolated_piece.append(z_i.T)
+    interpolated_piece = np.array(interpolated_piece)
+    interpolated_kernels.append(interpolated_piece)
+
+  # Start Cut the Kernels
+  cut_kernels = []
+  for ik in interpolated_kernels: # for each (4, 6, 6) kernel
+    print(ik.shape[1] / 2)
+    for x in range(0, ik.shape[1], ik.shape[1] // 2): # x will be 0 or 3
+      for y in range(0, ik.shape[2], ik.shape[2] // 2): # y will be 0 or 3
+        cut_pieces = [] # collect all channels
+        for i in range(ik.shape[0]): # iterate through channels, aka [0, 1, 2, 3]
+          cut_piece = np.zeros((ik[i].shape[0] // 2, ik[i].shape[1] // 2))
+          for j in range(0, ik[i].shape[0] // 2): # iterate through the side of the kernel, aka [0, 1, 2]
+            for k in range(0, ik[i].shape[1] // 2): # iterate through the side of the kernel, aka [0, 1, 2]
+              cut_piece[j][k] = ik[i][j + x][k + y] # fill the piece. Remember to add the offset x and y
+          cut_pieces.append(cut_piece)
+        cut_pieces = np.array(cut_pieces) # one kernel has finished cutting! Ready to push? GO!!!
+        cut_kernels.append(cut_pieces)
+  print((interpolated_kernels[5][0]))
+  print('==================================')
+  print((cut_kernels[20][0]))
+  print((cut_kernels[21][0]))
+  print((cut_kernels[22][0]))
+  print((cut_kernels[23][0]))
+  print('===============================')
+  # print(z_i.T)
+  ls = []
+  for i in range(len(cut_kernels)):
+    ls.append(np.append(cut_kernels[i].reshape(-1), obias[i // 4])) # a original kernel is cut into 4 subkernels, so i needs to // 4
+  # print((cut_kernels[23]))
+  # print(ls[23])
+  # ls = np.array(ls)
+  # print(ls.shape)
+  kmeans = KMeans(n_clusters=new_num_of_kernels,n_init='auto',random_state=10,max_iter=1000)
+  kmeans.fit(ls)
+  result = kmeans.cluster_centers_
+  new_bias = result[:, -1]
+  result = result[:, :-1]
+  result = result.reshape((result.shape[0], cut_kernels[0].shape[0], cut_kernels[0].shape[1], cut_kernels[0].shape[2]))
+  print(result.shape)
+  return result.T, new_bias.T
 
 def main():
     trainNetwork()
