@@ -218,7 +218,6 @@ class MyWindow(QWidget):
         training_param_history_file = open('training_history.txt', 'a')
         training_param_history_file.write(f"LAST STEPS:\t{last_steps}-----------------------------\n")
         training_param_history_file.write(f"stage:\t{stage}\nnum of actions:\t{num_of_actions}\nlock mode:\t{lockmode}\nis simple action locked:\t{is_simple_locked}\nis activate boss memory:\t{is_activate_boss_memory}\nis sweet boss:\t{is_sweet_boss}\nis RB resumed:\t{is_RB_resumed}\nis Brute Explore:\t{is_brute_exploring}\nlearning rate:\t{lr}\n")
-        training_param_history_file.write('-----------------------------')
         training_param_history_file.close()
         trainNetwork(stage, num_of_actions, lockmode, is_simple_locked, is_activate_boss_memory, is_sweet_boss, max_steps, is_inherit_checkpoint, is_RB_resumed, is_brute_exploring, lr, event)
         self.toggle_train_network()

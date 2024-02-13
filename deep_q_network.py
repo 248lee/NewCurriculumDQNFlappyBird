@@ -18,6 +18,7 @@ import argparse
 import pygame
 from sklearn.cluster import KMeans
 from scipy.interpolate import RegularGridInterpolator
+import time
 os.environ['CUDA_VISIBLE_DEVICES']='0'
 
 conv3_num_of_filters = 32
@@ -600,6 +601,7 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
     fall_action_effect_frame = fall_action_effect_len
     bruted_len = 1
     num_of_bruted_frames = 1
+    start_wall_clock = time.time()
     # 开始训练
     while True:
         if (event != None and event.is_set()) or t > max_steps:
@@ -608,6 +610,11 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print("stupid python")
             neuron.write(str(net1.f2.get_weights()[0]))
             neuron.close()
+            end_wall_clock = time.time()
+            training_param_history_file = open('training_history.txt', 'a')
+            training_param_history_file.write("Training wall time: " + str(end_wall_clock - start_wall_clock))
+            training_param_history_file.write('\n-----------------------------')
+            training_param_history_file.close()
             game_state.closeGame() # python is trash
             break
         # 根据输入的s_t,选择一个动作a_t
@@ -1046,7 +1053,6 @@ def john_bilinear(oarr, obias, new_num_of_kernels):
     for j in range(num_of_channels):
       old_kernel = oarr.T[i][j]
       # print(old_kernel)
-      from scipy.interpolate import RegularGridInterpolator
       x = np.linspace(0, 1, old_kernel.shape[0])
       y = np.linspace(0, 1, old_kernel.shape[1])
 
