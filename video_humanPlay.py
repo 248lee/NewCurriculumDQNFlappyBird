@@ -16,9 +16,9 @@ import wrapped_flappy_bird as game
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-game_state = game.GameState()
+game_state = game.GameState(isSweetBoss=False)
 frames = []
-input_sidelength = 30
+input_sidelength = 60
 t = 0
 while t < 650:
     a_t_to_game = np.zeros(3)
@@ -43,8 +43,14 @@ while t < 650:
     
     if ispress == False:
         a_t_to_game[0] = 1
-    x_t1_colored, r_t, terminal, score = game_state.frame_step(a_t_to_game)
+    x_t1_colored, r_t, terminal, score, _, _ = game_state.frame_step(a_t_to_game)
+    if t >= 80:
+        plt.imshow(x_t1_colored.transpose((1, 0, 2)))
+        plt.show()
     x_t1 = cv2.cvtColor(cv2.resize(x_t1_colored, (input_sidelength, input_sidelength)), cv2.COLOR_RGB2GRAY)
+    if t >= 80:
+        plt.imshow(x_t1.transpose(), cmap='gray')
+        plt.show()
     x_t1 = np.reshape(x_t1, (input_sidelength, input_sidelength, 1))
     if t > 450:
         frames.append(x_t1)

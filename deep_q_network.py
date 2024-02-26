@@ -38,7 +38,7 @@ conv1_num_of_filters = 32
 # isTrain = args.isTrain
 OBSERVE = 10000 # 训练前观察积累的轮数
 
-side_length_each_stage = [(0, 0), (50, 50), (100, 100), (100, 100), (100, 100)]
+side_length_each_stage = [(0, 0), (26, 26), (52, 52), (104, 104), (104, 104)]
 num_of_channels = 4
 sys.path.append("game/")
 import wrapped_flappy_bird as game
@@ -68,11 +68,6 @@ class MyNet(Model):
         self.b0 = None#BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
-        self.c1_2 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1_2', 
-                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
-                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.a1_2 = Activation('relu', name='relu_1_2')  # 激活层
-        self.p1_2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1_2')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -91,9 +86,7 @@ class MyNet(Model):
         #x = self.b0(x)
         x = self.a1_1(x)
         x = self.p1(x)
-        x = self.c1_2(x)
-        x = self.a1_2(x)
-        x = self.p1_2(x)
+
         x = self.flatten(x)
         x = self.f1(x)
         y = self.f2(x)
@@ -104,14 +97,14 @@ class MyNet2(Model):
     def __init__(self, num_of_actions, stage1_net=None):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
         super(MyNet2, self).__init__()
-        self.b3 = None
+        self.b4 = None
         self.c3_1 = None
-        self.b2 = None#BatchNormalization(name='batch2')  # BN层
+        self.b3 = None#BatchNormalization(name='batch2')  # BN层
         self.num_of_actions = num_of_actions
         self.c2_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b1 = None#BatchNormalization(name='batch1')  # BN层
+        self.b2 = None#BatchNormalization(name='batch1')  # BN层
         self.a2_1 = Activation('relu', name='relu_2')  # 激活层
         
         self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
@@ -120,18 +113,13 @@ class MyNet2(Model):
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
         else:
-            multiplier = num_of_channels / conv2_num_of_filters # 2 / 32, the 16 of 1 / 16 means that the input channel is 16 times larger
+            multiplier = num_of_channels / conv1_num_of_filters # 2 / 32, the 16 of 1 / 16 means that the input channel is 16 times larger
             self.c1_1 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=np.mean(stage1_net.c1_1.get_weights()[0]) * multiplier, stddev=np.std(stage1_net.c1_1.get_weights()[0]) * multiplier, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b0 = None#BatchNormalization(name='batch0')  # BN层
+        self.b1 = None#BatchNormalization(name='batch0')  # BN层
         self.a1_1 = Activation('relu', name='relu_1')  # 激活层
         self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
-        self.c1_2 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1_2', 
-                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
-                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.a1_2 = Activation('relu', name='relu_1_2')  # 激活层
-        self.p1_2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1_2')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -143,18 +131,15 @@ class MyNet2(Model):
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))
         self.is_going_to_load_previous_stage = not (stage1_net == None)
     def call(self, x):
-        #x = self.b2(x)
+        #x = self.b3(x)
         x = self.c2_1(x)
-        #x = self.b1(x)
+        #x = self.b2(x)
         x = self.a2_1(x)
         x = self.p2(x)
         x = self.c1_1(x)
-        #x = self.b0(x)
+        #x = self.b1(x)
         x = self.a1_1(x)
         x = self.p1(x)
-        x = self.c1_2(x)
-        x = self.a1_2(x)
-        x = self.p1_2(x)
 
         x = self.flatten(x)
         x = self.f1(x)
@@ -171,7 +156,6 @@ class MyNet2(Model):
         # new_kernel = custom_kernel_stage2(self.stage1_net, self.conv2_num_of_filters)
         # self.c1_1.set_weights([new_kernel, self.stage1_net.c1_1.get_weights()[1]])
         self.c2_1.set_weights([interpolated_kernel, k_bias])
-        self.c1_2.set_weights(stage1_net.c1_2.get_weights())
         self.f1.set_weights([stage1_net.f1.get_weights()[0], stage1_net.f1.get_weights()[1]])
         self.f2.set_weights(stage1_net.f2.get_weights())
         return
@@ -179,39 +163,33 @@ class MyNet2(Model):
 class MyNet3(Model):
     def __init__(self, num_of_actions, stage2_net=None):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
-        super(MyNet3, self).__init__()
+        super(MyNet2, self).__init__()
+        self.b4 = None
         self.num_of_actions = num_of_actions
-        self.b3 = None#BatchNormalization(name='batch2')  # BN层
         self.c3_1 = Conv2D(filters=conv3_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_3',
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
+        self.b3 = None#BatchNormalization(name='batch2')  # BN层
         self.a3_1 = Activation('relu', name='relu_3')  # 激活层
-        # No maxpool here
-        self.b2 = None#BatchNormalization(name='batch2')  # BN层
-        self.c2_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2',
-                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
-                           bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b1 = None#BatchNormalization(name='batch1')  # BN层
-        self.a2_1 = Activation('relu', name='relu_2')  # 激活层
-        
-        self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
+        self.p3 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
         if stage2_net == None:
-            self.c1_1 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
+            self.c2_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
         else:
-            multiplier = num_of_channels / conv3_num_of_filters # 2 / 32, the 16 of 1 / 16 means that the input channel is 16 times larger
-            self.c1_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
-                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=np.mean(stage2_net.c1_1.get_weights()[0]) * multiplier, stddev=np.std(stage2_net.c1_1.get_weights()[0]) * multiplier, seed=None),
+            multiplier = num_of_channels / conv2_num_of_filters # 2 / 32, the 16 of 1 / 16 means that the input channel is 16 times larger
+            self.c2_1 = Conv2D(filters=conv2_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_2', 
+                           kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=np.mean(stage2_net.c2_1.get_weights()[0]) * multiplier, stddev=np.std(stage2_net.c2_1.get_weights()[0]) * multiplier, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.b0 = None#BatchNormalization(name='batch0')  # BN层
-        self.a1_1 = Activation('relu', name='relu_1')  # 激活层
-        self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1')  # 池化层
-        self.c1_2 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1_2', 
+        self.b2 = None#BatchNormalization(name='batch0')  # BN层
+        self.a2_1 = Activation('relu', name='relu_2')  # 激活层
+        self.p2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_2')  # 池化层
+        self.c1_1 = Conv2D(filters=conv1_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_1', 
                            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.01, seed=None),
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))  # 卷积层
-        self.a1_2 = Activation('relu', name='relu_1_2')  # 激活层
-        self.p1_2 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1_2')  # 池化层
+        self.b1 = None#BatchNormalization(name='batch0')  # BN层
+        self.a1_1 = Activation('relu', name='relu_1')  # 激活层
+        self.p1 = MaxPool2D(pool_size=(2, 2), strides=2, padding='same', name='padding_1_2')  # 池化层
         #self.d1 = Dropout(0.2)  # dropout层
 
         self.flatten = Flatten()
@@ -223,21 +201,20 @@ class MyNet3(Model):
                            bias_initializer = tf.keras.initializers.Constant(value=0.01))
         self.is_going_to_load_previous_stage = not (stage2_net == None)
     def call(self, x):
-        #x = self.b3(x)
+        #x = self.b4(x)
         x = self.c3_1(x)
-        #x = self.b2(x)
+        #x = self.b3(x)
         x = self.a3_1(x)
+        x = self.p3(x)
         x = self.c2_1(x)
-        #x = self.b1(x)
+        #x = self.b2(x)
         x = self.a2_1(x)
         x = self.p2(x)
         x = self.c1_1(x)
-        #x = self.b0(x)
+        #x = self.b1(x)
         x = self.a1_1(x)
         x = self.p1(x)
-        x = self.c1_2(x)
-        x = self.a1_2(x)
-        x = self.p1_2(x)
+
         x = self.flatten(x)
         x = self.f1(x)
         y = self.f2(x)
@@ -249,12 +226,11 @@ class MyNet3(Model):
             print("ERROR! You should provide stage1_net when calling the constructor of MyNet2!!")
             input()
             return
-        interpolated_kernel, k_bias = john_bilinear(stage2_net.c2_1.get_weights()[0], stage2_net.c2_1.get_weights()[1], new_num_of_kernels=conv3_num_of_filters)
-        # new_kernel = custom_kernel_stage2(self.stage1_net, self.conv2_num_of_filters)
+        interpolated_kernel, k_bias = john_bilinear(stage2_net.c2_1.get_weights()[0], stage2_net.c2_1.get_weights()[1], conv3_num_of_filters)
+        # new_kernel = custom_kernel_stage2(self.stage1_net, self.conv3_num_of_filters)
         # self.c1_1.set_weights([new_kernel, self.stage1_net.c1_1.get_weights()[1]])
         self.c3_1.set_weights([interpolated_kernel, k_bias])
         self.c1_1.set_weights(stage2_net.c1_1.get_weights())
-        self.c1_2.set_weights(stage2_net.c1_2.get_weights())
         self.f1.set_weights([stage2_net.f1.get_weights()[0], stage2_net.f1.get_weights()[1]])
         self.f2.set_weights(stage2_net.f2.get_weights())
         return
@@ -263,6 +239,7 @@ def myprint(s):
         print(s, file=f)
 
 def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_activate_boss_memory, isSweetBoss, max_steps, resume_Adam, is_resume_RB_in_drive, is_brute_exploring, learning_rate=1e-6, event=None, is_colab=False):
+    previous_score = 0
     brute_exploring_rng = np.random.default_rng()
     hindsight_memory = []
     neuron = open("neurons.txt", 'w')
@@ -768,14 +745,14 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 D_boss.append((s_t_D, a_t_D, r_t_D, s_t1_D, terminal))
             else:
                 D.append((s_t_D, a_t_D, r_t_D, s_t1_D, terminal))
-        # if t <= OBSERVE:
-        #     #D_save.append((s_t_D_next, a_t_D, r_t_D, s_t1_D_next, terminal))
-        # else:
-        #     if not is_resume_RB_in_drive and t == OBSERVE + 1:
-        #         buffer_to_write = np.array(D_save, dtype=object) # Write the replay memory on observe to the drive
-        #         np.save('last_buffer', buffer_to_write)
-        #     buffer_to_write = None
-        #     D_save = None # After writing to the drive, clean the memory
+        if t <= OBSERVE:
+            D_save.append((s_t_D_next, a_t_D, r_t_D, s_t1_D_next, terminal))
+        else:
+            if not is_resume_RB_in_drive and t == OBSERVE + 1:
+                buffer_to_write = np.array(D_save, dtype=object) # Write the replay memory on observe to the drive
+                np.save('last_buffer', buffer_to_write)
+            buffer_to_write = None
+            D_save = None # After writing to the drive, clean the memory
         #如果D满了就替换最早的观测
         if len(D) > REPLAY_MEMORY:
             D.popleft()
@@ -906,7 +883,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print("TRAINED_TIMESTEP", (t_train+old_time), "|  ACTION", ACTIONS_NAME[action_index], "|  REWARD", r_t, \
              "|  Q_MAX %e \n" % np.max(readout_t), "| EPISODE", num_of_episode)
             rewards.append(r_t)
-            scores.append(score)
         else:
             print("OBSERVED_TIMESTEP", t, "|  ACTION", ACTIONS_NAME[action_index], "|  REWARD", r_t, \
              "|  Q_MAX %e \n" % np.max(readout_t), "| EPISODE", num_of_episode)
@@ -915,29 +891,20 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             avg_reward = np.average(np.array(rewards))
             avg_rewards_1000steps.append(avg_reward)
             rewards = []
+            # Also deal with the scores file
+            m = 0
+            i = 0
+            while i < 10:
+                if len(scores) - 1 - i < 0:
+                    break
+                m += scores[len(scores) - 1 - i]
+                i += 1
+            m /= (i + 1) # calculate the mean of the scores of the last 10 episodes
+            avg_scores_1000steps.append(m)
             #if is_colab:
             #  with train_summary_writer.as_default():
             #    tf.summary.scalar('reward', avg_reward, step=len(avg_rewards_1000steps))
-        
-
-        # write score to the average array, prepare to write to the file
-        if len(scores) >= 1000:
-            avg_score = avg_score - (scores[len(scores) - 1000] / 1000)
-            avg_score = avg_score + (scores[len(scores) - 1] / 1000)
-            avg_scores_1000steps.append(avg_score)
-            #if is_colab:
-            #  with train_summary_writer.as_default():
-            #    tf.summary.scalar('scores', avg_score, step=len(avg_scores_1000steps))
-        else:
-            if t > OBSERVE:
-                avg_score = avg_score + score / 1000
-        #if len(scores) >= 5000: # Clean the memory of scores
-        #    tmp_new_scores = []
-        #    for i in range(len(scores) - 1000, len(scores)):
-        #        tmp_new_scores.append(scores[i])
-        #    scores = tmp_new_scores
-
-        # write logs to files every 5000 steps
+                
         if len(readouts) % 5000 == 0:
             num_of_files = readouts[0].shape[1]
             for i in range(num_of_files):
@@ -948,16 +915,26 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             readouts = [] # clean the memory of the readouts
 
         if len(avg_rewards_1000steps) == 2:
+            if len(avg_scores_1000steps) != len(avg_rewards_1000steps):
+                print("ERROR OCCURRS! The len of avg_scores_1000_steps is suppose to be equal to the len of the avg_rewards_1000_steps.")
+                input()
             result_file = open("results.txt", 'a')
             for ar in avg_rewards_1000steps:
                 result_file.write(str(ar) + '\n')
             avg_rewards_1000steps = []
             result_file.close()
-            
+            # Also output the scores file
+            score_file = open("scores_training.txt", 'a')
+            for ar in avg_scores_1000steps:
+                score_file.write(str(ar) + '\n')
+            avg_scores_1000steps = []
+            score_file.close()
 
         # Count episodes
         if terminal:
             num_of_episode = num_of_episode + 1
+            scores.append(previous_score)
+        previous_score = score
         print("D's length:", len(D))
         
 
