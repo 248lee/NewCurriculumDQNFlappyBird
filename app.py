@@ -249,6 +249,8 @@ class MyWindow(QWidget):
             os.remove("model/FlappyBird.h5")
         if os.path.exists("scores_training.txt"):
             os.remove("scores_training.txt")
+        if os.path.exists("running_scores_avg.txt"):
+            os.remove("running_scores_avg.txt")
         for i in range(3):
             if os.path.exists("Qvalues/Q"+str(i)+".txt"):
                 os.remove("Qvalues/Q"+str(i)+".txt")

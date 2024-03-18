@@ -14,5 +14,6 @@
 /last_old_time.txt
 /now_num_of_actions.txt
 /now_stage.txt
-/last_buffer.npy
+/*.npy
 /last_buffer copy.npy
+/running_scores_avg.txt
