@@ -182,7 +182,8 @@ class MyNet2(Model):
         interpolated_kernel, k_bias = john_bilinear(stage1_net.c2.get_weights()[0], stage1_net.c2.get_weights()[1], conv3_num_of_filters)
         # new_kernel = custom_kernel_stage2(self.stage1_net, self.conv2_num_of_filters)
         # self.c1.set_weights([new_kernel, self.stage1_net.c1.get_weights()[1]])
-        self.c3.set_weights([interpolated_kernel, k_bias])
+        from transfer import information_combination
+        self.c3.set_weights([information_combination(interpolated_kernel, 1), k_bias])
 
         movie = np.load('movie.npy')
         death_episodes = np.load('death_episodes.npy')
@@ -214,7 +215,7 @@ class MyNet2(Model):
                 frame += 1
         from transfer import transfer
         trained_weights, trained_bias = transfer(conv2_num_of_filters, training_set_inputs, training_set_ground)
-        self.c2.set_weights([trained_weights, trained_bias])
+        self.c2.set_weights([information_combination(trained_weights, 0.88), trained_bias])
 
 
         self.c1.set_weights(stage1_net.c1.get_weights())
@@ -225,7 +226,7 @@ class MyNet2(Model):
 class MyNet3(Model):
     def __init__(self, num_of_actions, stage2_net=None):
         '''These are for the generalization of the function change2To3(new_net, old_net)'''
-        super(MyNet2, self).__init__()
+        super(MyNet3, self).__init__()
         self.b5 = None
         self.num_of_actions = num_of_actions
         self.c4 = Conv2D(filters=conv4_num_of_filters, kernel_size=(3, 3), padding='same', name='conv_4',
@@ -377,12 +378,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
             print('-------------load the model-----------------')
             net1.load_weights(checkpoint_save_path,by_name=True)
         else:
-            # Create the experimenting network for the control group
-            net2 = MyNet2(ACTIONS_2)
-            net2.build(input_shape=(1, next_input_sidelength[0] * 4, next_input_sidelength[1], num_of_channels))
-            net2.call(Input(shape=(next_input_sidelength[0] * 4, next_input_sidelength[1], num_of_channels)))
-            #net2.save_weights('model/ControlGroup.h5',save_format='h5') # Finally, save it
-            net2_2action = None # Clean the garbage
             print('-------------train new model-----------------')
             
         if net1.num_of_actions != num_of_actions: # If the new action is added
@@ -466,9 +461,10 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
         net1_target = MyNet2(net1.num_of_actions)
         if lock_mode == 0: # only new added is unlocked
             #net1.b3.trainable = True
-            net1.c2.trainable = False
+            net1.c3.trainable = False
+            net1.c2.trainable = True
             #net1.b2.trainable = False
-            net1.c1.trainable = True
+            net1.c1.trainable = False
             #net1.b1.trainable = False
             net1.f1.trainable = False
             net1.f2.trainable = False
@@ -522,12 +518,6 @@ def trainNetwork(stage, num_of_actions, lock_mode, is_simple_actions_locked, is_
                 net1 = MyNet3(now_num_action)
                 net1.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
                 net1.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
-                net2 = MyNet3(ACTIONS_2)
-                net2.build(input_shape=(1, input_sidelength[0], input_sidelength[1], num_of_channels))
-                net2.call(Input(shape=(input_sidelength[0], input_sidelength[1], num_of_channels)))
-                net2.load_weights('model/ControlGroup.h5')
-                change3To2(net1, net2)
-            
         if net1.num_of_actions != num_of_actions: # If the new action is added
             print("FROM TWO ACTIONS TO THREE!")
             new_net1 = MyNet3(num_of_actions) # This is the new three-actions-net
@@ -1158,6 +1148,8 @@ def john_bilinear(oarr, obias, new_num_of_kernels):
   result = result.reshape((result.shape[0], cut_kernels[0].shape[0], cut_kernels[0].shape[1], cut_kernels[0].shape[2]))
   print(result.shape)
   return result.T, new_bias.T
+
+
 
 def main():
     trainNetwork()
